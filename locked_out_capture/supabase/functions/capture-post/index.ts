@@ -104,6 +104,32 @@ Deno.serve(async (request) => {
     const rewardLabel = labelReward(rewardScore);
     const eegContext = buildEegContext(normalized);
 
+    const { data: existingObservation, error: existingObservationError } = await supabase
+      .from("post_observations")
+      .select("id,reward_score,reward_label")
+      .eq("user_id", normalized.user_id)
+      .eq("session_id", normalized.session_id)
+      .eq("post_id", post.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (existingObservationError) throw existingObservationError;
+    if (existingObservation) {
+      return jsonResponse({
+        ok: true,
+        duplicate: true,
+        post_id: post.id,
+        observation_id: existingObservation.id,
+        reward_score: existingObservation.reward_score,
+        reward_label: existingObservation.reward_label,
+        reward_source: "random_v0",
+        embedding_status: embeddingResult.ok ? "complete" : "failed",
+        embedding_model: embeddingModel,
+        embedding_error: embeddingResult.ok ? null : embeddingResult.error,
+      });
+    }
+
     const { data: observation, error: observationError } = await supabase
       .from("post_observations")
       .insert({

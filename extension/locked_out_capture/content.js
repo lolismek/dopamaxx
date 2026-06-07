@@ -5,11 +5,14 @@
   const SCAN_INTERVAL_MS = 250;
   const SCROLL_IDLE_MS = 700;
   const MIN_DWELL_MS = 1200;
-  const DUPLICATE_SUPPRESSION_MS = 60000;
   const CAPTURE_MESSAGE = "locked_out_capture_post";
   const STATUS_MESSAGE = "get_status";
   const MODE_CHANGE_MESSAGE = "mode_change";
   const LOG_PREFIX = "[DopaMAXX locked-out]";
+
+  if (typeof globalThis.__dopamaxxLockedOutCaptureStop === "function") {
+    globalThis.__dopamaxxLockedOutCaptureStop();
+  }
 
   const selector = globalThis.DopaMaxxLockedOutSelector;
   if (!selector) return;
@@ -20,7 +23,7 @@
   let scanTimer = null;
   let scanQueued = false;
   let lastScrollAtMs = 0;
-  const submittedAtByPostId = new Map();
+  const submittedPostIds = new Set();
 
   function isSupportedHost() {
     const host = window.location.hostname.replace(/^www\./, "");
@@ -36,7 +39,7 @@
     scanTimer = window.setInterval(queueScan, SCAN_INTERVAL_MS);
     window.addEventListener("scroll", handleScroll, { passive: true });
     window.addEventListener("resize", queueScan, { passive: true });
-    console.log(`${LOG_PREFIX} active`, {
+    console.debug(`${LOG_PREFIX} active`, {
       mode: currentMode,
       scan_interval_ms: SCAN_INTERVAL_MS,
       scroll_idle_ms: SCROLL_IDLE_MS,
@@ -114,9 +117,9 @@
     currentWinner.rect = rectToJson(winner.candidate.rect);
 
     if (dwellMs < MIN_DWELL_MS) return;
-    if (wasRecentlySubmitted(post.platform_post_id, nowMs)) return;
+    if (submittedPostIds.has(post.platform_post_id)) return;
 
-    submittedAtByPostId.set(post.platform_post_id, nowMs);
+    submittedPostIds.add(post.platform_post_id);
     submitCapture({
       post,
       dwell_ms: Math.round(dwellMs),
@@ -140,7 +143,7 @@
         detection: {
           min_dwell_ms: MIN_DWELL_MS,
           scroll_idle_ms: SCROLL_IDLE_MS,
-          duplicate_suppression_ms: DUPLICATE_SUPPRESSION_MS,
+          duplicate_policy: "once_per_post_per_tab_session",
           selector_version: "centered_post_v1",
         },
       },
@@ -249,14 +252,9 @@
     return media;
   }
 
-  function wasRecentlySubmitted(postId, nowMs) {
-    const submittedAt = submittedAtByPostId.get(postId);
-    return typeof submittedAt === "number" && nowMs - submittedAt < DUPLICATE_SUPPRESSION_MS;
-  }
-
   function submitCapture(capture) {
     const sentAtMs = performance.now();
-    console.log(`${LOG_PREFIX} capture-submit`, {
+    console.debug(`${LOG_PREFIX} capture-submit`, {
       post_id: capture.post.platform_post_id,
       author: capture.post.author_handle,
       dwell_ms: capture.dwell_ms,
@@ -270,7 +268,7 @@
       chrome.runtime.sendMessage({ type: CAPTURE_MESSAGE, capture }, (response) => {
         const extensionRoundTripMs = Math.round(performance.now() - sentAtMs);
         if (chrome.runtime.lastError) {
-          console.log(`${LOG_PREFIX} capture-error`, {
+          console.warn(`${LOG_PREFIX} capture-error`, {
             post_id: capture.post.platform_post_id,
             extension_round_trip_ms: extensionRoundTripMs,
             error: chrome.runtime.lastError.message,
@@ -278,7 +276,7 @@
           return;
         }
         if (!response || !response.ok) {
-          console.log(`${LOG_PREFIX} capture-rejected`, {
+          console.warn(`${LOG_PREFIX} capture-rejected`, {
             post_id: capture.post.platform_post_id,
             extension_round_trip_ms: extensionRoundTripMs,
             error: response && response.error,
@@ -298,7 +296,7 @@
       });
     } catch (error) {
       stop();
-      console.log(`${LOG_PREFIX} extension-context-invalidated`, {
+      console.warn(`${LOG_PREFIX} extension-context-invalidated`, {
         post_id: capture.post.platform_post_id,
         error: error && error.message ? error.message : String(error),
         action: "reload the X tab after reloading the unpacked extension",
@@ -308,7 +306,7 @@
 
   function logCandidateDetected(winner, nowMs) {
     const msSinceScroll = lastScrollAtMs > 0 ? Math.round(nowMs - lastScrollAtMs) : null;
-    console.log(`${LOG_PREFIX} centered-post-detected`, {
+    console.debug(`${LOG_PREFIX} centered-post-detected`, {
       post_id: winner.post.platform_post_id,
       author: winner.post.author_handle,
       ms_since_scroll: msSinceScroll,
@@ -334,6 +332,8 @@
       height: Math.round(rect.height),
     };
   }
+
+  globalThis.__dopamaxxLockedOutCaptureStop = stop;
 
   chrome.runtime.onMessage.addListener((msg) => {
     if (!msg || msg.type !== MODE_CHANGE_MESSAGE) return;
