@@ -60,7 +60,6 @@
       method: "POST",
       headers: {
         "content-type": "application/json",
-        "authorization": `Bearer ${config.supabaseAnonKey}`,
         "apikey": config.supabaseAnonKey,
       },
       body: JSON.stringify(payload),

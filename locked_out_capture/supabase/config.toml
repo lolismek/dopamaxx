@@ -1,0 +1,2 @@
+[functions.capture-post]
+verify_jwt = false

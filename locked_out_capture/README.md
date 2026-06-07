@@ -26,8 +26,8 @@ configure the Supabase endpoint from the extension service worker console:
 ```js
 chrome.storage.local.set({
   lockedOutCaptureConfig: {
-    supabaseFunctionUrl: "https://<project-ref>.functions.supabase.co/capture-post",
-    supabaseAnonKey: "<supabase-anon-key>",
+    supabaseFunctionUrl: "https://<project-ref>.supabase.co/functions/v1/capture-post",
+    supabaseAnonKey: "<supabase-publishable-key>",
     userId: "demo_user"
   }
 });
@@ -48,8 +48,10 @@ supabase secrets set OPENAI_API_KEY=<openai-api-key>
 supabase secrets set OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 ```
 
-Supabase provides `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to deployed
-functions.
+Supabase provides `SUPABASE_URL` and `SUPABASE_SECRET_KEYS` to deployed
+functions. The `capture-post` function has `verify_jwt = false` in
+`supabase/config.toml` so it can be called with the newer `sb_publishable_...`
+key format.
 
 ## Compatibility Notes
 

@@ -61,7 +61,7 @@ Deno.serve(async (request) => {
     const normalized = normalizePayload(payload);
 
     const supabaseUrl = requiredEnv("SUPABASE_URL");
-    const serviceRoleKey = requiredEnv("SUPABASE_SERVICE_ROLE_KEY");
+    const serviceRoleKey = supabaseAdminKey();
     const openaiApiKey = requiredEnv("OPENAI_API_KEY");
     const embeddingModel = Deno.env.get("OPENAI_EMBEDDING_MODEL") || "text-embedding-3-small";
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
@@ -276,6 +276,20 @@ function requiredEnv(name: string) {
   const value = Deno.env.get(name);
   if (!value) throw new Error(`${name} is not configured`);
   return value;
+}
+
+function supabaseAdminKey() {
+  const legacyServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (legacyServiceRoleKey) return legacyServiceRoleKey;
+
+  const secretKeysJson = Deno.env.get("SUPABASE_SECRET_KEYS");
+  if (secretKeysJson) {
+    const secretKeys = JSON.parse(secretKeysJson) as Record<string, string>;
+    const defaultSecretKey = secretKeys.default;
+    if (defaultSecretKey) return defaultSecretKey;
+  }
+
+  throw new Error("SUPABASE_SECRET_KEYS.default or SUPABASE_SERVICE_ROLE_KEY is required");
 }
 
 function requireString(value: unknown, fieldName: string) {
