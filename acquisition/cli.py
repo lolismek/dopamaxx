@@ -25,6 +25,11 @@ def serve(
     http_port: int = typer.Option(8000, "--http-port", help="HTTP bind port."),
     stream_name: str = typer.Option(STREAM_NAME, "--stream-name", help="LSL stream name."),
     window_s: float = typer.Option(5.0, "--window-s", help="Rolling EEG window length."),
+    inference_window_s: float = typer.Option(
+        1.5,
+        "--inference-window-s",
+        help="Recent EEG window length for focus/reward inference.",
+    ),
     bridge_path: Path | None = typer.Option(None, "--bridge-path", help="Absolute path to dsi2lsl.exe."),
 ) -> None:
     """Serve the live acquisition dashboard and WebSocket stream."""
@@ -38,6 +43,7 @@ def serve(
             bridge_path=bridge_path,
             stream_name=stream_name,
             window_s=window_s,
+            inference_window_s=inference_window_s,
         )
     )
     app_obj = create_app(runtime)
