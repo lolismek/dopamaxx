@@ -33,6 +33,14 @@
       "matches": ["<all_urls>"],
       "js": ["content.js"],
       "run_at": "document_end"
+    },
+    {
+      "matches": ["https://x.com/*", "https://twitter.com/*"],
+      "js": [
+        "locked_out_capture/selector.js",
+        "locked_out_capture/content.js"
+      ],
+      "run_at": "document_idle"
     }
   ],
 
