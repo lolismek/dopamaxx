@@ -26,10 +26,10 @@ block on a timer. DopaMAXX makes the loop adaptive:
 The key feedback loop:
 
 1. During Locked Out, the Chrome extension watches the centered Twitter/X post.
-2. After a dwell threshold, the post is paired with derived EEG context.
-3. Supabase stores the post, the reward label, and an embedding.
-4. During Locked In, the autoscroll engine ranks candidate posts against prior
-   EEG-positive examples.
+2. After a dwell threshold, the post is captured as a timer-based demo signal.
+3. Supabase/local storage keeps the post, timing context, and optional EEG data.
+4. During Locked In, the autoscroll engine queues visible For You candidates
+   without EEG reward or embedding matching.
 5. If focus drops, the microdose feed serves a small, personalized burst and then
    hands the user back to work.
 
@@ -243,8 +243,8 @@ Start the acquisition service, then create an autoscroll run:
 curl -X POST http://127.0.0.1:8000/agent/autoscroll/start \
   -H "content-type: application/json" \
   -d '{
-    "user_id": "demo-user",
-    "session_id": "demo-session",
+    "user_id": "demo_user",
+    "session_id": "demo_session",
     "target_count": 20,
     "timeout_s": 10
   }'
@@ -253,13 +253,13 @@ curl -X POST http://127.0.0.1:8000/agent/autoscroll/start \
 Open the feed:
 
 ```text
-http://127.0.0.1:8000/microdose/feed?user_id=demo-user&session_id=demo-session
+http://127.0.0.1:8000/microdose/feed?user_id=demo_user&session_id=demo_session
 ```
 
 Fetch queue JSON directly:
 
 ```text
-http://127.0.0.1:8000/feed/microdose?user_id=demo-user&session_id=demo-session
+http://127.0.0.1:8000/feed/microdose?user_id=demo_user&session_id=demo_session
 ```
 
 In a fully connected demo, candidate posts come from either the extension's
@@ -274,10 +274,10 @@ with deterministic fallback embeddings.
 2. Open the dashboard and show live focus/reward movement.
 3. Load the Chrome extension and switch between Locked In and Locked Out.
 4. In Locked Out, scroll Twitter/X and dwell on a post long enough for capture.
-5. Show the Supabase observation row and embedding status.
+5. Show the Supabase observation row and dwell/timer context.
 6. Switch back to Locked In and start a microdose run.
-7. Open the microdose feed and show posts ranked from prior EEG-positive
-   reactions.
+7. Open the microdose feed and show timer-selected posts queued from the For You
+   buffer.
 8. Explain the safety boundary: raw EEG is not uploaded by the extension; stored
    observations contain derived timing, focus, reward, and post metadata.
 
@@ -351,4 +351,3 @@ RUN_TRIBEV2_INTEGRATION=1 python -m pytest tribev2_text/tests/test_integration.p
 - More controlled Twitter/X candidate retrieval.
 - Multi-user auth and secure profile isolation.
 - Better operator console for deterministic live judging demos.
-

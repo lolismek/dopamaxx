@@ -8,7 +8,7 @@ the existing MV3 extension without a build step.
 
 1. The content script runs only on `x.com` and `twitter.com`.
 2. It chooses the centered, mostly visible tweet and waits until it wins for
-   `1200ms`.
+   `7000ms`.
 3. The extension background script verifies the current mode is `locked_out`.
 4. The background script summarizes the acquisition WebSocket frames for that
    dwell window.

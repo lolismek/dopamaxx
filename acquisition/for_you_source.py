@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
 from acquisition.content_models import PostCandidate, utc_now_iso
@@ -64,16 +65,28 @@ class ForYouCandidateSource:
         user_id = str(query_context.get("user_id") or "")
         session_id = str(query_context.get("session_id") or "")
         prefer_for_you = query_context.get("candidate_source") in {None, "x_for_you", "for_you"}
+        for_you_only = _for_you_only(query_context)
         target_count = _positive_int(query_context.get("target_count")) or limit
+        recent_window_s = _positive_float(query_context.get("recent_activity_window_s"))
+        if recent_window_s is None:
+            recent_window_s = _positive_float(query_context.get("recent_window_s"))
 
         candidates: list[PostCandidate] = []
         seen: set[str] = set()
 
         if prefer_for_you and user_id:
-            candidates = await self._list_buffered(user_id=user_id, session_id=session_id, limit=limit)
+            candidates = await self._list_buffered(
+                user_id=user_id,
+                session_id=session_id,
+                limit=limit,
+                recent_window_s=recent_window_s,
+            )
             seen.update(candidate.post_id for candidate in candidates)
             if len(candidates) >= min(limit, target_count):
                 return candidates[:limit]
+
+        if for_you_only:
+            return candidates[:limit]
 
         if len(candidates) < limit and self.fallback is not None:
             try:
@@ -102,17 +115,35 @@ class ForYouCandidateSource:
             )
 
     async def _list_buffered(
-        self, *, user_id: str, session_id: str, limit: int
+        self,
+        *,
+        user_id: str,
+        session_id: str,
+        limit: int,
+        recent_window_s: float | None = None,
     ) -> list[PostCandidate]:
         async with self._lock:
+            now = datetime.now(timezone.utc)
             candidates = [
                 candidate
                 for candidate in self._candidates.values()
                 if candidate.user_id == user_id
                 and (not session_id or candidate.session_id == session_id)
+                and _is_recent(candidate.observed_at, now, recent_window_s)
             ]
             candidates.sort(key=lambda candidate: candidate.sequence, reverse=True)
-            return [candidate.post.model_copy(deep=True) for candidate in candidates[:limit]]
+            posts: list[PostCandidate] = []
+            for candidate in candidates[:limit]:
+                post = candidate.post.model_copy(deep=True)
+                post.metadata = dict(post.metadata)
+                post.metadata.update(
+                    {
+                        "observed_at": candidate.observed_at,
+                        "for_you_sequence": candidate.sequence,
+                    }
+                )
+                posts.append(post)
+            return posts
 
     def _trim_locked(self, user_id: str) -> None:
         user_candidates = [
@@ -136,3 +167,60 @@ def _positive_int(value: Any) -> int | None:
     except (TypeError, ValueError):
         return None
     return number if number > 0 else None
+
+
+def _positive_float(value: Any) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number > 0 else None
+
+
+def _for_you_only(query_context: dict[str, Any]) -> bool:
+    value = (
+        query_context.get("for_you_only")
+        or query_context.get("strict_for_you")
+        or query_context.get("disable_twitter_fallback")
+    )
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    if value:
+        return True
+
+    return (
+        query_context.get("candidate_source") in {"x_for_you", "for_you"}
+        and _truthy(query_context.get("require_interest_profile"))
+    )
+
+
+def _truthy(value: Any) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def _is_recent(value: str, now: datetime, window_s: float | None) -> bool:
+    if window_s is None:
+        return True
+
+    observed_at = _parse_iso_datetime(value)
+    if observed_at is None:
+        return False
+    age_s = (now - observed_at).total_seconds()
+    return 0 <= age_s <= window_s
+
+
+def _parse_iso_datetime(value: Any) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    normalized = value.strip()
+    if normalized.endswith("Z"):
+        normalized = f"{normalized[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)

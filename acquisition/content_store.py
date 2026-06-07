@@ -21,7 +21,7 @@ class ContentStore(Protocol):
         """Persist a dwell-gated Locked Out reaction."""
 
     async def list_preference_reactions(self, user_id: str, limit: int = 500) -> list[PostReaction]:
-        """Return recent hit/miss reactions for ranking."""
+        """Return recent dwell-gated reactions for demo selection context."""
 
     async def create_agent_run(self, run: AgentRun) -> AgentRun:
         """Persist a new autoscroll run."""
@@ -63,7 +63,7 @@ class InMemoryContentStore:
             reactions = [
                 reaction
                 for reaction in self._reactions.values()
-                if reaction.user_id == user_id and reaction.label in {"hit", "miss"}
+                if reaction.user_id == user_id and reaction.dwell_ms > 0
             ]
             reactions.sort(key=lambda reaction: reaction.created_at, reverse=True)
             return [reaction.model_copy(deep=True) for reaction in reactions[:limit]]
@@ -147,7 +147,6 @@ class SupabaseContentStore:
             params={
                 "select": "*",
                 "user_id": f"eq.{user_id}",
-                "label": "in.(hit,miss)",
                 "order": "created_at.desc",
                 "limit": str(limit),
             },
@@ -163,7 +162,6 @@ class SupabaseContentStore:
                     "text,media,embedding,embedding_status)"
                 ),
                 "user_id": f"eq.{user_id}",
-                "reward_label": "in.(hit,miss)",
                 "order": "observed_at.desc",
                 "limit": str(limit),
             },
@@ -172,10 +170,10 @@ class SupabaseContentStore:
         reactions = [
             PostReaction.model_validate(self._normalize_reaction_row(row))
             for row in reaction_rows
-            if self._parse_embedding(row.get("embedding"))
+            if int(row.get("dwell_ms") or 0) > 0
         ]
         reactions.extend(self._reaction_from_locked_out_observation(row) for row in observation_rows)
-        reactions = [reaction for reaction in reactions if reaction.embedding]
+        reactions = [reaction for reaction in reactions if reaction.dwell_ms > 0]
         return self._dedupe_reactions(reactions)[:limit]
 
     async def create_agent_run(self, run: AgentRun) -> AgentRun:

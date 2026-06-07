@@ -1,20 +1,31 @@
 const feedEl = document.getElementById("feed");
 const statusEl = document.getElementById("status");
-const runId = new URLSearchParams(window.location.search).get("run_id");
+const params = new URLSearchParams(window.location.search);
+const runId = params.get("run_id");
+const refreshMs = boundedRefreshMs(params.get("refresh_ms"));
+let loadInFlight = false;
 
 loadFeed();
+setInterval(() => loadFeed({ silent: true }), refreshMs);
 
-async function loadFeed() {
+async function loadFeed(options = {}) {
+  if (loadInFlight) return;
+  loadInFlight = true;
+  if (!options.silent) statusEl.textContent = "LOADING";
   const response = await sendMessage({ type: "get_microdose_feed", runId });
-  if (!response.ok) {
-    statusEl.textContent = "ERROR";
-    renderEmpty(response.error || "feed unavailable");
-    return;
-  }
+  try {
+    if (!response.ok) {
+      statusEl.textContent = "ERROR";
+      renderEmpty(response.error || "feed unavailable");
+      return;
+    }
 
-  const items = response.items || [];
-  statusEl.textContent = `${items.length} READY`;
-  renderFeed(items);
+    const items = response.items || [];
+    statusEl.textContent = `${items.length} READY`;
+    renderFeed(items);
+  } finally {
+    loadInFlight = false;
+  }
 }
 
 function renderFeed(items) {
@@ -112,6 +123,12 @@ function statusButton(queueId, status, label, primary) {
 function scoreText(score) {
   if (!Number.isFinite(score)) return "score n/a";
   return `score ${score.toFixed(3)}`;
+}
+
+function boundedRefreshMs(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 20000;
+  return Math.max(5000, Math.min(60000, Math.round(number)));
 }
 
 function sendMessage(message) {

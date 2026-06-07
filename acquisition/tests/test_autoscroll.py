@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
 
 from acquisition.autoscroll import AutoscrollService
 from acquisition.content_models import AutoscrollStartRequest, PostCandidate, PostReaction, QueueItem
 from acquisition.content_store import InMemoryContentStore, SupabaseContentStore
-from acquisition.scoring import PreferenceScorer
 from acquisition.service import create_app
 
 
@@ -42,9 +42,11 @@ class KeywordEmbedder:
 class FakeCandidateSource:
     def __init__(self, candidates: list[PostCandidate]) -> None:
         self.candidates = candidates
+        self.query_context: dict | None = None
 
     async def fetch_candidates(self, query_context: dict, limit: int) -> list[PostCandidate]:
         assert query_context["agent_mode"] == "locked_in_manual_live_scroll"
+        self.query_context = query_context
         return self.candidates[:limit]
 
 
@@ -79,15 +81,15 @@ def test_locked_out_reaction_endpoint_stores_derived_hit_label() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert payload["reaction"]["label"] == "hit"
-    assert payload["reaction"]["embedding"] == [1.0, 0.0]
+    assert payload["reaction"]["embedding"] == []
     assert "raw_eeg" not in payload["reaction"]
 
 
-def test_autoscroll_ranks_hit_like_candidates_before_miss_like_candidates() -> None:
+def test_autoscroll_queues_source_order_without_reward_matching() -> None:
     asyncio.run(_assert_autoscroll_ranking())
 
 
-def test_autoscroll_compiles_twenty_high_reward_recommendations() -> None:
+def test_autoscroll_compiles_twenty_timer_demo_recommendations() -> None:
     asyncio.run(_assert_autoscroll_compiles_twenty_recommendations())
 
 
@@ -98,6 +100,8 @@ def test_supabase_store_reads_locked_out_observations_as_preference_reactions() 
         async def fake_request(method, table, params=None, json=None, headers=None):
             assert method == "GET"
             assert params["user_id"] == "eq.demo-user"
+            assert "label" not in params
+            assert "reward_label" not in params
             if table == "post_reactions":
                 return []
             if table == "post_observations":
@@ -106,8 +110,8 @@ def test_supabase_store_reads_locked_out_observations_as_preference_reactions() 
                         "id": "obs-1",
                         "user_id": "demo-user",
                         "session_id": "locked-out-session",
-                        "reward_score": 0.82,
-                        "reward_label": "hit",
+                        "reward_score": 0.0,
+                        "reward_label": "neutral",
                         "focus_score": 0.61,
                         "dwell_ms": 1400,
                         "observed_at": "2026-06-07T12:00:00+00:00",
@@ -119,8 +123,8 @@ def test_supabase_store_reads_locked_out_observations_as_preference_reactions() 
                             "author_name": "Example",
                             "text": "AI agents are getting useful",
                             "media": [{"src": "https://example.test/image.png"}],
-                            "embedding": "[1,0]",
-                            "embedding_status": "complete",
+                            "embedding": None,
+                            "embedding_status": "pending",
                         },
                     }
                 ]
@@ -132,10 +136,10 @@ def test_supabase_store_reads_locked_out_observations_as_preference_reactions() 
         assert len(reactions) == 1
         reaction = reactions[0]
         assert reaction.post_id == "tweet-1"
-        assert reaction.label == "hit"
-        assert reaction.reward_score == 0.82
+        assert reaction.label == "neutral"
+        assert reaction.reward_score == 0.0
         assert reaction.focus_score == 0.61
-        assert reaction.embedding == [1.0, 0.0]
+        assert reaction.embedding == []
         assert reaction.media_urls == ["https://example.test/image.png"]
         assert reaction.metadata["source"] == "locked_out_capture"
 
@@ -220,6 +224,7 @@ def test_autoscroll_prefers_buffered_for_you_candidates() -> None:
                 reward_score=0.9,
                 label="hit",
                 dwell_ms=1600,
+                created_at=iso_seconds_ago(60),
             )
         )
     )
@@ -266,7 +271,7 @@ def test_autoscroll_prefers_buffered_for_you_candidates() -> None:
         run_id = start.json()["run"]["run_id"]
 
         completed = None
-        for _ in range(20):
+        for _ in range(60):
             completed = client.get(f"/agent/autoscroll/runs/{run_id}").json()["run"]
             if completed["status"] != "running":
                 break
@@ -290,20 +295,6 @@ def test_autoscroll_prefers_buffered_for_you_candidates() -> None:
 
 def test_autoscroll_completes_from_buffered_candidates_without_twitter_mcp() -> None:
     store = InMemoryContentStore()
-    asyncio.run(
-        store.insert_reaction(
-            PostReaction(
-                user_id="demo-user",
-                session_id="locked-out",
-                post_id="hit-1",
-                text="AI machine learning systems",
-                embedding=[1.0, 0.0],
-                reward_score=0.9,
-                label="hit",
-                dwell_ms=1600,
-            )
-        )
-    )
     app = create_app(
         FakeRuntime(),
         content_store=store,
@@ -345,7 +336,7 @@ def test_autoscroll_completes_from_buffered_candidates_without_twitter_mcp() -> 
         run_id = start.json()["run"]["run_id"]
 
         completed = None
-        for _ in range(20):
+        for _ in range(60):
             completed = client.get(f"/agent/autoscroll/runs/{run_id}").json()["run"]
             if completed["status"] != "running":
                 break
@@ -368,6 +359,177 @@ def test_autoscroll_completes_from_buffered_candidates_without_twitter_mcp() -> 
     assert len(feed.json()["items"]) == 20
 
 
+def test_strict_for_you_autoscroll_does_not_fall_back_to_twitter_search() -> None:
+    store = InMemoryContentStore()
+    app = create_app(
+        FakeRuntime(),
+        content_store=store,
+        candidate_source=FakeCandidateSource(
+            [PostCandidate(post_id="fallback-1", text="AI agent infrastructure for startups")]
+        ),
+        embedder=KeywordEmbedder(),
+    )
+
+    with TestClient(app) as client:
+        reaction = client.post(
+            "/locked-out/reactions",
+            json={
+                "user_id": "demo-user",
+                "session_id": "locked-out",
+                "post": {"post_id": "interest-1", "text": "AI agent infrastructure for startups"},
+                "reward_score": 0.0,
+                "focus_score": 0.6,
+                "dwell_ms": 8000,
+                "eeg_features": {},
+            },
+        )
+        assert reaction.status_code == 200
+
+        start = client.post(
+            "/agent/autoscroll/start",
+            json={
+                "user_id": "demo-user",
+                "session_id": "demo-session",
+                "target_count": 1,
+                "timeout_s": 1,
+                "query_context": {
+                    "candidate_source": "x_for_you",
+                    "for_you_only": True,
+                    "recent_activity_window_s": 0,
+                    "require_interest_profile": True,
+                },
+            },
+        )
+        assert start.status_code == 200
+        run_id = start.json()["run"]["run_id"]
+
+        completed = None
+        for _ in range(60):
+            completed = client.get(f"/agent/autoscroll/runs/{run_id}").json()["run"]
+            if completed["status"] != "running":
+                break
+            asyncio.run(asyncio.sleep(0.05))
+
+        feed = client.get(
+            "/feed/microdose",
+            params={
+                "user_id": "demo-user",
+                "session_id": "demo-session",
+                "run_id": run_id,
+            },
+        )
+
+    assert completed is not None
+    assert completed["status"] == "completed"
+    assert completed["queued_count"] == 0
+    assert feed.status_code == 200
+    assert feed.json()["items"] == []
+
+
+def test_autoscroll_allows_non_startup_candidates_without_reward_matching() -> None:
+    asyncio.run(_assert_autoscroll_allows_non_startup_candidates())
+
+
+def test_autoscroll_seeds_recent_engaged_posts_from_twenty_second_window() -> None:
+    asyncio.run(_assert_autoscroll_seeds_recent_engaged_posts())
+
+
+def test_autoscroll_filters_buffered_for_you_to_recent_activity_window() -> None:
+    store = InMemoryContentStore()
+    app = create_app(
+        FakeRuntime(),
+        content_store=store,
+        candidate_source=FailingCandidateSource(),
+        embedder=KeywordEmbedder(),
+    )
+
+    with TestClient(app) as client:
+        old_ingest = client.post(
+            "/feed/for-you/candidates",
+            json={
+                "user_id": "demo-user",
+                "session_id": "demo-session",
+                "observed_at": iso_seconds_ago(35),
+                "posts": [
+                    {
+                        "post_id": "old-buffered",
+                        "text": "old buffered post",
+                        "url": "https://x.com/demo/status/old",
+                        "source": "x_for_you_extension",
+                    }
+                ],
+            },
+        )
+        recent_ingest = client.post(
+            "/feed/for-you/candidates",
+            json={
+                "user_id": "demo-user",
+                "session_id": "demo-session",
+                "observed_at": iso_seconds_ago(5),
+                "posts": [
+                    {
+                        "post_id": "recent-buffered",
+                        "text": "recent buffered post",
+                        "url": "https://x.com/demo/status/recent",
+                        "source": "x_for_you_extension",
+                    }
+                ],
+            },
+        )
+        assert old_ingest.status_code == 200
+        assert recent_ingest.status_code == 200
+
+        start = client.post(
+            "/agent/autoscroll/start",
+            json={
+                "user_id": "demo-user",
+                "session_id": "demo-session",
+                "target_count": 1,
+                "timeout_s": 2,
+                "query_context": {
+                    "candidate_source": "x_for_you",
+                    "recent_activity_window_s": 20,
+                },
+            },
+        )
+        assert start.status_code == 200
+        run_id = start.json()["run"]["run_id"]
+
+        completed = None
+        for _ in range(20):
+            completed = client.get(f"/agent/autoscroll/runs/{run_id}").json()["run"]
+            if completed["status"] != "running":
+                break
+            asyncio.run(asyncio.sleep(0.05))
+
+        feed = client.get(
+            "/feed/microdose",
+            params={
+                "user_id": "demo-user",
+                "session_id": "demo-session",
+                "run_id": run_id,
+            },
+        )
+
+    assert completed is not None
+    assert completed["status"] == "completed"
+    assert feed.status_code == 200
+    assert [item["post_id"] for item in feed.json()["items"]] == ["recent-buffered"]
+    assert "refreshed_at" in feed.json()
+
+
+def test_autoscroll_filters_candidates_to_seven_second_post_type() -> None:
+    asyncio.run(_assert_autoscroll_filters_to_long_dwell_type())
+
+
+def test_autoscroll_rejects_generic_keyword_matches() -> None:
+    asyncio.run(_assert_autoscroll_rejects_generic_keyword_matches())
+
+
+def test_autoscroll_requires_seven_second_profile_when_requested() -> None:
+    asyncio.run(_assert_autoscroll_requires_long_dwell_profile())
+
+
 async def _assert_autoscroll_ranking() -> None:
     store = InMemoryContentStore()
     await store.insert_reaction(
@@ -380,6 +542,7 @@ async def _assert_autoscroll_ranking() -> None:
             reward_score=0.9,
             label="hit",
             dwell_ms=1600,
+            created_at=iso_seconds_ago(60),
         )
     )
     await store.insert_reaction(
@@ -392,6 +555,7 @@ async def _assert_autoscroll_ranking() -> None:
             reward_score=-0.8,
             label="miss",
             dwell_ms=1600,
+            created_at=iso_seconds_ago(60),
         )
     )
 
@@ -405,14 +569,13 @@ async def _assert_autoscroll_ranking() -> None:
             ]
         ),
         embedder=KeywordEmbedder(),
-        scorer=PreferenceScorer(),
     )
     run = await service.start(
         AutoscrollStartRequest(user_id="demo-user", session_id="work", target_count=2, timeout_s=2)
     )
 
     completed = None
-    for _ in range(20):
+    for _ in range(60):
         completed = await store.get_agent_run(run.run_id)
         if completed and completed.status != "running":
             break
@@ -423,24 +586,13 @@ async def _assert_autoscroll_ranking() -> None:
     assert completed.queued_count == 2
 
     items = await store.list_ready_queue(user_id="demo-user", session_id="work")
-    assert [item.post_id for item in items] == ["ai-1", "ai-2"]
+    assert [item.post_id for item in items] == ["sports-1", "ai-1"]
     assert all(item.predicted_reward > 0 for item in items)
+    assert all("no 7-second post type signal yet" in (item.rationale or "") for item in items)
 
 
 async def _assert_autoscroll_compiles_twenty_recommendations() -> None:
     store = InMemoryContentStore()
-    await store.insert_reaction(
-        PostReaction(
-            user_id="demo-user",
-            session_id="locked-out",
-            post_id="hit-1",
-            text="AI machine learning systems",
-            embedding=[1.0, 0.0],
-            reward_score=0.9,
-            label="hit",
-            dwell_ms=1600,
-        )
-    )
 
     service = AutoscrollService(
         store=store,
@@ -451,14 +603,13 @@ async def _assert_autoscroll_compiles_twenty_recommendations() -> None:
             ]
         ),
         embedder=KeywordEmbedder(),
-        scorer=PreferenceScorer(),
     )
     run = await service.start(
         AutoscrollStartRequest(user_id="demo-user", session_id="work", target_count=20, timeout_s=2)
     )
 
     completed = None
-    for _ in range(20):
+    for _ in range(60):
         completed = await store.get_agent_run(run.run_id)
         if completed and completed.status != "running":
             break
@@ -471,3 +622,250 @@ async def _assert_autoscroll_compiles_twenty_recommendations() -> None:
     items = await store.list_ready_queue(user_id="demo-user", session_id="work", limit=25)
     assert len(items) == 20
     assert [item.rank for item in items] == list(range(1, 21))
+    assert all(item.predicted_reward == 0.5 for item in items)
+
+
+async def _assert_autoscroll_allows_non_startup_candidates() -> None:
+    store = InMemoryContentStore()
+    await store.insert_reaction(
+        PostReaction(
+            user_id="demo-user",
+            session_id="locked-out",
+            post_id="hit-1",
+            text="AI machine learning systems",
+            embedding=[1.0, 0.0],
+            reward_score=0.9,
+            label="hit",
+            dwell_ms=1600,
+            created_at=iso_seconds_ago(60),
+        )
+    )
+
+    service = AutoscrollService(
+        store=store,
+        candidate_source=FakeCandidateSource(
+            [PostCandidate(post_id="ai-1", text="AI agent research notes")]
+        ),
+        embedder=KeywordEmbedder(),
+    )
+    run = await service.start(
+        AutoscrollStartRequest(user_id="demo-user", session_id="work", target_count=1, timeout_s=2)
+    )
+
+    completed = None
+    for _ in range(60):
+        completed = await store.get_agent_run(run.run_id)
+        if completed and completed.status != "running":
+            break
+        await asyncio.sleep(0.05)
+
+    assert completed is not None
+    assert completed.status == "completed"
+    assert completed.queued_count == 1
+    assert completed.error is None
+
+    items = await store.list_ready_queue(user_id="demo-user", session_id="work")
+    assert [item.post_id for item in items] == ["ai-1"]
+
+
+async def _assert_autoscroll_seeds_recent_engaged_posts() -> None:
+    store = InMemoryContentStore()
+    await store.insert_reaction(
+        PostReaction(
+            user_id="demo-user",
+            session_id="locked-out",
+            post_id="recent-engaged",
+            text="recent engaged post",
+            author="demo",
+            url="https://x.com/demo/status/recent-engaged",
+            embedding=[],
+            reward_score=0.0,
+            label="neutral",
+            dwell_ms=8000,
+            created_at=iso_seconds_ago(10),
+        )
+    )
+    await store.insert_reaction(
+        PostReaction(
+            user_id="demo-user",
+            session_id="locked-out",
+            post_id="stale-engaged",
+            text="stale engaged post",
+            embedding=[],
+            reward_score=0.0,
+            label="neutral",
+            dwell_ms=3000,
+            created_at=iso_seconds_ago(45),
+        )
+    )
+
+    service = AutoscrollService(
+        store=store,
+        candidate_source=FailingCandidateSource(),
+        embedder=KeywordEmbedder(),
+    )
+    run = await service.start(
+        AutoscrollStartRequest(
+            user_id="demo-user",
+            session_id="work",
+            target_count=1,
+            timeout_s=2,
+            query_context={"recent_activity_window_s": 20},
+        )
+    )
+
+    completed = None
+    for _ in range(60):
+        completed = await store.get_agent_run(run.run_id)
+        if completed and completed.status != "running":
+            break
+        await asyncio.sleep(0.05)
+
+    assert completed is not None
+    assert completed.status == "completed"
+    assert completed.queued_count == 1
+
+    items = await store.list_ready_queue(user_id="demo-user", session_id="work")
+    assert [item.post_id for item in items] == ["recent-engaged"]
+    assert items[0].metadata["source"] == "locked_out_recent_activity"
+    assert items[0].predicted_reward == 1.0
+
+
+async def _assert_autoscroll_filters_to_long_dwell_type() -> None:
+    store = InMemoryContentStore()
+    await store.insert_reaction(
+        PostReaction(
+            user_id="demo-user",
+            session_id="locked-out",
+            post_id="interest-ai",
+            text="AI agents and machine learning startup tooling",
+            embedding=[],
+            reward_score=0.0,
+            label="neutral",
+            dwell_ms=8200,
+            created_at=iso_seconds_ago(60),
+        )
+    )
+
+    service = AutoscrollService(
+        store=store,
+        candidate_source=FakeCandidateSource(
+            [
+                PostCandidate(post_id="sports-1", text="baseball rumors roundup"),
+                PostCandidate(post_id="single-ai", text="AI memes"),
+                PostCandidate(
+                    post_id="author-false-positive",
+                    text="random topic",
+                    author="machine learning startup",
+                ),
+                PostCandidate(post_id="ai-1", text="AI agent infrastructure for startups"),
+                PostCandidate(post_id="ml-1", text="machine learning founder notes"),
+            ]
+        ),
+        embedder=KeywordEmbedder(),
+    )
+    run = await service.start(
+        AutoscrollStartRequest(user_id="demo-user", session_id="work", target_count=2, timeout_s=2)
+    )
+
+    completed = None
+    for _ in range(60):
+        completed = await store.get_agent_run(run.run_id)
+        if completed and completed.status != "running":
+            break
+        await asyncio.sleep(0.05)
+
+    assert completed is not None
+    assert completed.status == "completed"
+    assert completed.queued_count == 2
+
+    items = await store.list_ready_queue(user_id="demo-user", session_id="work")
+    assert [item.post_id for item in items] == ["ai-1", "ml-1"]
+    assert all("type match" in (item.rationale or "") for item in items)
+
+
+async def _assert_autoscroll_rejects_generic_keyword_matches() -> None:
+    store = InMemoryContentStore()
+    await store.insert_reaction(
+        PostReaction(
+            user_id="demo-user",
+            session_id="locked-out",
+            post_id="interest-box",
+            text=(
+                "Box now has a markdown editor on the web. Full CLI support. "
+                "Commenting. Full version history. Box Drive connects desktop clients."
+            ),
+            embedding=[],
+            reward_score=0.0,
+            label="neutral",
+            dwell_ms=8200,
+            created_at=iso_seconds_ago(60),
+        )
+    )
+
+    service = AutoscrollService(
+        store=store,
+        candidate_source=FakeCandidateSource(
+            [
+                PostCandidate(post_id="generic-1", text="full version game content update"),
+                PostCandidate(post_id="box-1", text="Box markdown editor CLI support ships"),
+            ]
+        ),
+        embedder=KeywordEmbedder(),
+    )
+    run = await service.start(
+        AutoscrollStartRequest(user_id="demo-user", session_id="work", target_count=1, timeout_s=2)
+    )
+
+    completed = None
+    for _ in range(60):
+        completed = await store.get_agent_run(run.run_id)
+        if completed and completed.status != "running":
+            break
+        await asyncio.sleep(0.05)
+
+    assert completed is not None
+    assert completed.status == "completed"
+    assert completed.queued_count == 1
+
+    items = await store.list_ready_queue(user_id="demo-user", session_id="work")
+    assert [item.post_id for item in items] == ["box-1"]
+    assert "full" not in (items[0].rationale or "")
+    assert "version" not in (items[0].rationale or "")
+
+
+async def _assert_autoscroll_requires_long_dwell_profile() -> None:
+    store = InMemoryContentStore()
+    service = AutoscrollService(
+        store=store,
+        candidate_source=FailingCandidateSource(),
+        embedder=KeywordEmbedder(),
+    )
+    run = await service.start(
+        AutoscrollStartRequest(
+            user_id="demo-user",
+            session_id="work",
+            target_count=1,
+            timeout_s=1,
+            query_context={"require_interest_profile": True},
+        )
+    )
+
+    completed = None
+    for _ in range(60):
+        completed = await store.get_agent_run(run.run_id)
+        if completed and completed.status != "running":
+            break
+        await asyncio.sleep(0.05)
+
+    assert completed is not None
+    assert completed.status == "completed"
+    assert completed.queued_count == 0
+    assert completed.error == "no 7-second post type signal was available before the run expired"
+
+    items = await store.list_ready_queue(user_id="demo-user", session_id="work")
+    assert items == []
+
+
+def iso_seconds_ago(seconds: int) -> str:
+    return (datetime.now(timezone.utc) - timedelta(seconds=seconds)).isoformat()

@@ -4,7 +4,7 @@
   const MODE_LOCKED_OUT = "locked_out";
   const SCAN_INTERVAL_MS = 250;
   const SCROLL_IDLE_MS = 300;
-  const MIN_DWELL_MS = 1200;
+  const MIN_DWELL_MS = 7000;
   const CAPTURE_MESSAGE = "locked_out_capture_post";
   const FOR_YOU_CANDIDATES_MESSAGE = "for_you_candidates";
   const STATUS_MESSAGE = "get_status";

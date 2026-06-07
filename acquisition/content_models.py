@@ -79,7 +79,7 @@ class AutoscrollStartRequest(BaseModel):
     user_id: str = Field(min_length=1)
     session_id: str = Field(min_length=1)
     target_count: int = Field(default=20, ge=1, le=100)
-    timeout_s: float = Field(default=45.0, gt=0, le=300)
+    timeout_s: float = Field(default=3.0, gt=0, le=300)
     query_context: dict[str, Any] = Field(default_factory=dict)
 
 

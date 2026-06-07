@@ -25,6 +25,7 @@ from acquisition.content_models import (
     PostReaction,
     QueueStatusUpdateRequest,
     ReactionIngestRequest,
+    utc_now_iso,
 )
 from acquisition.content_store import ContentStore, content_store_from_env
 from acquisition.for_you_source import ForYouCandidateSource
@@ -308,11 +309,6 @@ def create_app(
 
     @app.post("/locked-out/reactions")
     async def ingest_reaction(request: ReactionIngestRequest) -> dict:
-        try:
-            embedding = await post_embedder.embed_post(request.post)
-        except Exception as exc:
-            raise HTTPException(status_code=502, detail=f"post embedding failed: {exc}") from exc
-
         reaction = PostReaction(
             user_id=request.user_id,
             session_id=request.session_id,
@@ -321,7 +317,7 @@ def create_app(
             author=request.post.author,
             url=request.post.url,
             media_urls=request.post.media_urls,
-            embedding=embedding,
+            embedding=[],
             reward_score=request.reward_score,
             focus_score=request.focus_score,
             label=request.resolved_label(REWARD_HIT_THRESHOLD, REWARD_MISS_THRESHOLD),
@@ -385,7 +381,10 @@ def create_app(
             limit=limit,
             run_id=run_id,
         )
-        return {"items": [item.model_dump(mode="json") for item in items]}
+        return {
+            "items": [item.model_dump(mode="json") for item in items],
+            "refreshed_at": utc_now_iso(),
+        }
 
     @app.patch("/feed/microdose/{queue_id}")
     async def update_microdose_item(queue_id: str, request: QueueStatusUpdateRequest) -> dict:

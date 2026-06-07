@@ -5,6 +5,8 @@ const DEFAULT_BACKEND_URL = "http://127.0.0.1:8000";
 const MICRODOSE_USER_ID = "demo_user";
 const MICRODOSE_SESSION_ID = "demo_session";
 const MICRODOSE_TARGET_COUNT = 20;
+const MICRODOSE_RECENT_ACTIVITY_WINDOW_S = 20;
+const MICRODOSE_ACTIVITY_REFRESH_MS = 20000;
 const MICRODOSE_POLL_ALARM = "microdose-poll";
 const EEG_WS_STORAGE_KEY = "dopamaxxEegWsUrl";
 const BACKEND_URL_STORAGE_KEY = "dopamaxxBackendUrl";
@@ -12,6 +14,8 @@ const LOCKED_OUT_CAPTURE_CONFIG_STORAGE_KEY = "lockedOutCaptureConfig";
 const MICRODOSE_READY_TIMEOUT_MS = 60000;
 const MICRODOSE_READY_POLL_MS = 1500;
 const FOR_YOU_CANDIDATES_MESSAGE = "for_you_candidates";
+const X_BLOCKED_NOTIFICATION_ID = "dopamaxx-x-blocked";
+const X_BLOCKED_NOTIFICATION_COOLDOWN_MS = 8000;
 
 const DISTRACTING_SITES = [
   "twitter.com", "x.com",
@@ -55,6 +59,7 @@ const EEG_RECENT_GRACE_MS = 2000;
 const EEG_REWARD_SOURCE = "acquisition_inference_v1";
 let eegReconnectTimer = null;
 let eegConnectSequence = 0;
+let lastXBlockedNotificationAt = 0;
 
 function connectWebSocket() {
   const sequence = ++eegConnectSequence;
@@ -382,7 +387,9 @@ function labelReward(score) {
 // ── Microdose feed ────────────────────────────────────────────────────────
 
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.alarms.create(MICRODOSE_POLL_ALARM, { periodInMinutes: 0.1 });
+  chrome.alarms.create(MICRODOSE_POLL_ALARM, {
+    periodInMinutes: MICRODOSE_ACTIVITY_REFRESH_MS / 60000,
+  });
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
@@ -403,10 +410,13 @@ async function startMicrodoseRun() {
       user_id: MICRODOSE_USER_ID,
       session_id: MICRODOSE_SESSION_ID,
       target_count: MICRODOSE_TARGET_COUNT,
-      timeout_s: 45,
+      timeout_s: 3,
       query_context: {
         trigger: "chrome_extension_demo",
         candidate_source: "x_for_you",
+        recent_activity_window_s: MICRODOSE_RECENT_ACTIVITY_WINDOW_S,
+        require_interest_profile: true,
+        for_you_only: true,
       },
     }),
   });
@@ -496,6 +506,7 @@ async function fetchMicrodoseItems(runId = state.microdoseRunId) {
   url.searchParams.set("user_id", MICRODOSE_USER_ID);
   url.searchParams.set("session_id", MICRODOSE_SESSION_ID);
   url.searchParams.set("limit", String(MICRODOSE_TARGET_COUNT));
+  url.searchParams.set("refresh_ms", String(MICRODOSE_ACTIVITY_REFRESH_MS));
   if (runId) url.searchParams.set("run_id", runId);
 
   const response = await fetch(url.toString());
@@ -596,9 +607,14 @@ function setMode(newMode) {
   if (newMode === MODE_LOCKED_IN) {
     // Remember which tab is the work tab right now
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      if (tabs[0]) state.workTabId = tabs[0].id;
+      const activeTab = tabs[0];
+      if (activeTab && !isDistracting(activeTab.url)) {
+        state.workTabId = activeTab.id;
+      }
       broadcastStatus();
     });
+    showXBlockedNotification();
+    blockOpenXTabs();
   } else {
     broadcastStatus();
   }
@@ -623,6 +639,46 @@ function isDistracting(url) {
   }
 }
 
+function isXUrl(url) {
+  if (!url) return false;
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, "");
+    return host === "x.com" ||
+      host.endsWith(".x.com") ||
+      host === "twitter.com" ||
+      host.endsWith(".twitter.com");
+  } catch {
+    return false;
+  }
+}
+
+function blockOpenXTabs() {
+  chrome.tabs.query({}, (tabs) => {
+    for (const tab of tabs) {
+      if (!tab.id || !isXUrl(tab.url)) continue;
+      redirectToBlocked(tab.id);
+    }
+  });
+}
+
+function showXBlockedNotification() {
+  const now = Date.now();
+  if (now - lastXBlockedNotificationAt < X_BLOCKED_NOTIFICATION_COOLDOWN_MS) return;
+  lastXBlockedNotificationAt = now;
+
+  if (!chrome.notifications || typeof chrome.notifications.create !== "function") return;
+  const created = chrome.notifications.create(X_BLOCKED_NOTIFICATION_ID, {
+    type: "basic",
+    iconUrl: "icons/icon128.png",
+    title: "X is blocked",
+    message: "Locked In mode is active. X stays closed until Locked Out.",
+    priority: 2,
+  });
+  if (created && typeof created.catch === "function") {
+    created.catch(() => {});
+  }
+}
+
 function redirectToBlocked(tabId) {
   const blockedUrl = chrome.runtime.getURL("blocked.html");
   chrome.tabs.update(tabId, { url: blockedUrl }).catch(() => {});
@@ -634,6 +690,7 @@ chrome.tabs.onActivated.addListener(({ tabId }) => {
   chrome.tabs.get(tabId, (tab) => {
     if (chrome.runtime.lastError) return;
     if (isDistracting(tab.url)) {
+      if (isXUrl(tab.url)) showXBlockedNotification();
       // Switch back to work tab if we still have it, else just block
       if (state.workTabId && state.workTabId !== tabId) {
         chrome.tabs.update(state.workTabId, { active: true }).catch(() => {});
@@ -649,6 +706,7 @@ chrome.webNavigation.onBeforeNavigate.addListener(({ tabId, url, frameId }) => {
   if (frameId !== 0) return; // main frame only
   if (state.mode !== MODE_LOCKED_IN) return;
   if (isDistracting(url)) {
+    if (isXUrl(url)) showXBlockedNotification();
     redirectToBlocked(tabId);
   }
 });
@@ -658,6 +716,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (state.mode !== MODE_LOCKED_IN) return;
   if (!changeInfo.url) return;
   if (isDistracting(changeInfo.url)) {
+    if (isXUrl(changeInfo.url)) showXBlockedNotification();
     // Give the tab a moment to actually load before redirecting
     setTimeout(() => redirectToBlocked(tabId), 50);
   }
@@ -775,6 +834,8 @@ function getStatus() {
       userId: MICRODOSE_USER_ID,
       sessionId: MICRODOSE_SESSION_ID,
       targetCount: MICRODOSE_TARGET_COUNT,
+      recentActivityWindowS: MICRODOSE_RECENT_ACTIVITY_WINDOW_S,
+      activityRefreshMs: MICRODOSE_ACTIVITY_REFRESH_MS,
       readyCount: state.microdoseReadyCount,
       runId: state.microdoseRunId,
       runStatus: state.microdoseRunStatus,

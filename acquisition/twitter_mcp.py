@@ -27,7 +27,7 @@ class CandidateSource(Protocol):
 class TwitterMCPConfig:
     url: str | None = None
     fetch_tool: str = "twitter.search_candidates"
-    timeout_s: float = 20.0
+    timeout_s: float = 3.0
     extra_arguments: dict[str, Any] = field(default_factory=dict)
 
 

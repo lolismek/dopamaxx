@@ -224,21 +224,26 @@
 
   <script>
     const params = new URLSearchParams(window.location.search);
-    const userId = params.get("user_id") || "demo-user";
-    const sessionId = params.get("session_id") || "demo-session";
+    const userId = params.get("user_id") || "demo_user";
+    const sessionId = params.get("session_id") || "demo_session";
     const runId = params.get("run_id") || "";
     const limit = params.get("limit") || "20";
+    const refreshMs = boundedRefreshMs(params.get("refresh_ms"));
 
     const feedEl = document.getElementById("feed");
     const statusEl = document.getElementById("status");
     const runLabelEl = document.getElementById("runLabel");
+    let loadInFlight = false;
 
     runLabelEl.textContent = runId ? `run ${runId.slice(0, 8)}` : `${userId} / ${sessionId}`;
     loadFeed();
+    window.setInterval(() => loadFeed({ silent: true }), refreshMs);
 
-    async function loadFeed() {
+    async function loadFeed(options = {}) {
+      if (loadInFlight) return;
+      loadInFlight = true;
       try {
-        setStatus("Loading");
+        if (!options.silent) setStatus("Loading");
         const url = new URL("/feed/microdose", window.location.origin);
         url.searchParams.set("user_id", userId);
         url.searchParams.set("session_id", sessionId);
@@ -256,13 +261,24 @@
       } catch (error) {
         setStatus("Error", "error");
         renderEmpty(String(error));
+      } finally {
+        loadInFlight = false;
       }
+    }
+
+    function boundedRefreshMs(value) {
+      const number = Number(value);
+      if (!Number.isFinite(number)) return 20000;
+      return Math.max(5000, Math.min(60000, Math.round(number)));
     }
 
     function renderFeed(items) {
       feedEl.innerHTML = "";
       if (!items.length) {
-        renderEmpty("no ready posts");
+        const scope = runId
+          ? `run ${runId.slice(0, 8)}`
+          : `${userId} / ${sessionId}`;
+        renderEmpty(`no ready posts for ${scope}`);
         return;
       }
 

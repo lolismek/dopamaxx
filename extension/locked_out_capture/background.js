@@ -118,28 +118,51 @@
   }
 
   function buildEegContext({ epochStartMs, epochEndMs, dwellMs }) {
+    let context = null;
     if (typeof globalThis.dopamaxxBuildLockedOutEegContext === "function") {
       const liveContext = globalThis.dopamaxxBuildLockedOutEegContext({
         epochStartMs,
         epochEndMs,
         dwellMs,
       });
-      if (liveContext && typeof liveContext === "object") return liveContext;
+      if (liveContext && typeof liveContext === "object") context = liveContext;
     }
 
-    return {
+    const base = context || {
       acquisition_schema: "acquisition.websocket.eeg_frame.v1",
       stream_name: "DSI24-EEG",
       sample_rate_hz: 300,
       channel_labels: CHANNEL_LABELS,
-      source_mode: "random_v0",
-      reward_source: "random_v0",
-      reward_model_version: "random_v0",
+      source_mode: "timer_v1",
       epoch_start_ms: epochStartMs,
       epoch_end_ms: epochEndMs,
-      dwell_ms: dwellMs,
       frame_count: 0,
     };
+    return withTimerReward(base, dwellMs);
+  }
+
+  function withTimerReward(context, dwellMs) {
+    const timerScore = timerRewardScore(dwellMs);
+    return Object.assign({}, context, {
+      reward_source: "locked_out_dwell_timer_v1",
+      reward_model_version: "locked_out_dwell_timer_v1",
+      dwell_ms: Math.max(0, Math.round(Number(dwellMs) || 0)),
+      timer_reward_score: timerScore,
+      reward_score: timerScore,
+      reward_label: labelTimerReward(timerScore),
+    });
+  }
+
+  function timerRewardScore(dwellMs) {
+    const score = Math.max(0, Number(dwellMs) || 0) / 3000;
+    return Math.max(0.05, Math.min(1, Math.round(score * 1000000) / 1000000));
+  }
+
+  function labelTimerReward(score) {
+    if (!Number.isFinite(score)) return "neutral";
+    if (score >= 0.25) return "hit";
+    if (score <= -0.25) return "miss";
+    return "neutral";
   }
 
   async function loadConfig() {
@@ -156,15 +179,8 @@
   }
 
   async function sendLocalReaction(payload, config) {
-    const rewardScore = numberOrNull(payload.eeg_context && payload.eeg_context.reward_score);
-    if (rewardScore == null) {
-      return {
-        ok: false,
-        skipped: true,
-        error: "no recent EEG reward score for local reaction",
-      };
-    }
-
+    const rewardScore = numberOrNull(payload.eeg_context && payload.eeg_context.reward_score) ??
+      timerRewardScore(payload.dwell_ms);
     const focusScore = numberOrNull(payload.eeg_context && payload.eeg_context.focus_score);
     const sentAtMs = performance.now();
     try {
@@ -185,6 +201,9 @@
             source: "locked_out_capture_extension",
             metadata: {
               author_name: payload.author_name || null,
+              dwell_ms: payload.dwell_ms,
+              timer_reward_score: rewardScore,
+              reward_source: payload.eeg_context && payload.eeg_context.reward_source,
               raw_media: Array.isArray(payload.media) ? payload.media : [],
               raw_capture: payload.raw_capture || {},
             },
@@ -192,7 +211,7 @@
           reward_score: rewardScore,
           focus_score: focusScore,
           dwell_ms: payload.dwell_ms,
-          eeg_features: payload.eeg_context || {},
+          eeg_features: numericFeatures(payload.eeg_context),
         }),
       });
       const localRoundTripMs = Math.round(performance.now() - sentAtMs);
@@ -313,6 +332,16 @@
   function numberOrNull(value) {
     const number = Number(value);
     return Number.isFinite(number) ? number : null;
+  }
+
+  function numericFeatures(value) {
+    if (!value || typeof value !== "object") return {};
+    const features = {};
+    for (const [key, raw] of Object.entries(value)) {
+      const number = Number(raw);
+      if (Number.isFinite(number)) features[key] = number;
+    }
+    return features;
   }
 
   function makeSessionId() {

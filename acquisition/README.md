@@ -30,8 +30,8 @@ $env:DOPAMAXX_TWITTER_MCP_FETCH_TOOL = "twitter.search_candidates"
 ```
 
 If Supabase is not configured, the server uses an in-memory store for local
-testing. The MVP stores derived reaction features, labels, embeddings, queue
-items, and agent-run state; it does not store raw EEG samples.
+testing. The demo stores dwell/timer context, optional derived EEG features,
+queue items, and agent-run state; it does not store raw EEG samples.
 
 Useful routes:
 
@@ -40,7 +40,7 @@ POST /locked-out/reactions
 POST /agent/autoscroll/start
 POST /agent/autoscroll/cancel
 GET  /agent/autoscroll/runs/{run_id}
-GET  /feed/microdose?user_id=demo-user&session_id=demo-session
+GET  /feed/microdose?user_id=demo_user&session_id=demo_session
 PATCH /feed/microdose/{queue_id}
 ```
 
