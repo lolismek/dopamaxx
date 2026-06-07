@@ -1120,6 +1120,70 @@
     }
     ctx.putImageData(img,0,0);
 
+    // ─── TOPOGRAPHIC CONTOUR LINES (marching squares) ────────────────────
+    // Pre-sample the smoothed activity field onto a regular grid
+    const CRES = 60;
+    const fld  = new Float32Array((CRES+1)*(CRES+1));
+    for (let gy=0;gy<=CRES;gy++) for (let gx=0;gx<=CRES;gx++) {
+      const nx=(gx/CRES)*2-1, ny=(gy/CRES)*2-1;
+      fld[gy*(CRES+1)+gx] = Math.hypot(nx,ny)<=1.04
+        ? interpolateAt(nx,ny,labels,topoSmoothed) : NaN;
+    }
+    // Grid coords → canvas pixels
+    const gc=(x,y)=>[cx+((x/CRES)*2-1)*r, cy+((y/CRES)*2-1)*r];
+    // Clamped edge crossing parameter
+    const ct=(va,vb,lv)=>Math.abs(vb-va)<1e-9?0.5:Math.max(0,Math.min(1,(lv-va)/(vb-va)));
+    // Marching squares: edge pairs by case (T=top R=right B=bottom L=left)
+    // Bit encoding: 8=TL 4=TR 2=BR 1=BL (1 = value ≥ contour level)
+    const MC=[
+      [],                    // 0
+      [['L','B']],           // 1
+      [['B','R']],           // 2
+      [['L','R']],           // 3
+      [['T','R']],           // 4
+      [['T','R'],['L','B']], // 5  saddle
+      [['T','B']],           // 6
+      [['T','L']],           // 7
+      [['T','L']],           // 8
+      [['T','B']],           // 9
+      [['T','L'],['B','R']], // 10 saddle
+      [['T','R']],           // 11
+      [['L','R']],           // 12
+      [['B','R']],           // 13
+      [['L','B']],           // 14
+      [],                    // 15
+    ];
+    // Contour levels: cool blues for depression, warm oranges for activation
+    const cLevels=[
+      {lv:-0.65, w:1.3, c:'rgba(50,80,155,0.55)'},
+      {lv:-0.35, w:0.8, c:'rgba(60,100,170,0.32)'},
+      {lv: 0.00, w:0.7, c:'rgba(130,120,110,0.28)'},
+      {lv: 0.35, w:0.8, c:'rgba(175,80,22,0.32)'},
+      {lv: 0.65, w:1.3, c:'rgba(160,55,14,0.55)'},
+    ];
+    for (const {lv,w,c} of cLevels) {
+      ctx.strokeStyle=c; ctx.lineWidth=w*dpr; ctx.beginPath();
+      for (let gy=0;gy<CRES;gy++) for (let gx=0;gx<CRES;gx++) {
+        const vTL=fld[ gy   *(CRES+1)+ gx   ];
+        const vTR=fld[ gy   *(CRES+1)+(gx+1)];
+        const vBR=fld[(gy+1)*(CRES+1)+(gx+1)];
+        const vBL=fld[(gy+1)*(CRES+1)+ gx   ];
+        if(isNaN(vTL)||isNaN(vTR)||isNaN(vBR)||isNaN(vBL)) continue;
+        const code=((vTL>=lv)?8:0)|((vTR>=lv)?4:0)|((vBR>=lv)?2:0)|((vBL>=lv)?1:0);
+        const segs=MC[code]; if(!segs.length) continue;
+        // Compute edge crossing points in canvas space
+        const E={
+          T: gc(gx+ct(vTL,vTR,lv), gy),
+          R: gc(gx+1,               gy+ct(vTR,vBR,lv)),
+          B: gc(gx+ct(vBL,vBR,lv), gy+1),
+          L: gc(gx,                 gy+ct(vTL,vBL,lv)),
+        };
+        for(const[ea,eb] of segs){ctx.moveTo(...E[ea]);ctx.lineTo(...E[eb]);}
+      }
+      ctx.stroke();
+    }
+    // ─────────────────────────────────────────────────────────────────────
+
     ctx.save();
     // Head outline in cream
     ctx.strokeStyle='#C4C0B8'; ctx.lineWidth=1.5*dpr;
