@@ -62,7 +62,7 @@ Deno.serve(async (request) => {
 
     const supabaseUrl = requiredEnv("SUPABASE_URL");
     const serviceRoleKey = supabaseAdminKey();
-    const openaiApiKey = requiredEnv("OPENAI_API_KEY");
+    const openaiApiKey = Deno.env.get("OPENAI_API_KEY");
     const embeddingModel = Deno.env.get("OPENAI_EMBEDDING_MODEL") || "text-embedding-3-small";
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
       auth: { persistSession: false },
@@ -185,7 +185,14 @@ function normalizePayload(payload: CapturePayload) {
   };
 }
 
-async function createEmbedding(options: { apiKey: string; model: string; input: string }) {
+async function createEmbedding(options: { apiKey: string | undefined; model: string; input: string }) {
+  if (!options.apiKey) {
+    return {
+      ok: false as const,
+      error: "OPENAI_API_KEY is not configured",
+    };
+  }
+
   try {
     const response = await fetch("https://api.openai.com/v1/embeddings", {
       method: "POST",
