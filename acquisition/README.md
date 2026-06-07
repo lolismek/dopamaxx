@@ -17,6 +17,33 @@ python -m acquisition serve --simulate
 
 Open `http://127.0.0.1:8000`.
 
+## Locked In Autoscroll API
+
+The same FastAPI server exposes the demo autoscroll endpoints used by the
+Chrome extension:
+
+```powershell
+$env:DOPAMAXX_SUPABASE_URL = "https://<project>.supabase.co"
+$env:DOPAMAXX_SUPABASE_SERVICE_ROLE_KEY = "<service-role-key>"
+$env:DOPAMAXX_TWITTER_MCP_URL = "http://127.0.0.1:9000/mcp"
+$env:DOPAMAXX_TWITTER_MCP_FETCH_TOOL = "twitter.search_candidates"
+```
+
+If Supabase is not configured, the server uses an in-memory store for local
+testing. The MVP stores derived reaction features, labels, embeddings, queue
+items, and agent-run state; it does not store raw EEG samples.
+
+Useful routes:
+
+```text
+POST /locked-out/reactions
+POST /agent/autoscroll/start
+POST /agent/autoscroll/cancel
+GET  /agent/autoscroll/runs/{run_id}
+GET  /feed/microdose?user_id=demo-user&session_id=demo-session
+PATCH /feed/microdose/{queue_id}
+```
+
 ## Real DSI-24 Mode
 
 ```powershell

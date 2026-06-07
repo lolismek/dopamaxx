@@ -1,6 +1,11 @@
 // Modes
 const MODE_LOCKED_IN = "locked_in";
 const MODE_LOCKED_OUT = "locked_out";
+const BACKEND_URL = "http://localhost:8000";
+const MICRODOSE_USER_ID = "demo-user";
+const MICRODOSE_SESSION_ID = "demo-session";
+const MICRODOSE_TARGET_COUNT = 20;
+const MICRODOSE_POLL_ALARM = "microdose-poll";
 
 const DISTRACTING_SITES = [
   "twitter.com", "x.com",
@@ -23,6 +28,11 @@ let state = {
   rewardScore: null,
   ws: null,
   wsConnected: false,
+  microdoseReadyCount: 0,
+  microdoseRunId: null,
+  microdoseRunStatus: null,
+  microdoseLastOpenedRunId: null,
+  microdoseLastError: null,
 };
 
 // ── WebSocket ──────────────────────────────────────────────────────────────
@@ -78,6 +88,104 @@ function handleBackendMessage(msg) {
     broadcastStatus();
   }
   // EEG frames (no .type) are silently consumed — connection staying alive is enough.
+}
+
+// ── Microdose feed ────────────────────────────────────────────────────────
+
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.alarms.create(MICRODOSE_POLL_ALARM, { periodInMinutes: 0.1 });
+});
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name !== MICRODOSE_POLL_ALARM) return;
+  pollMicrodoseFeed({ openWhenReady: true }).catch((error) => {
+    state.microdoseLastError = String(error);
+    broadcastStatus();
+  });
+});
+
+async function startMicrodoseRun() {
+  state.microdoseLastError = null;
+  const response = await fetch(`${BACKEND_URL}/agent/autoscroll/start`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      user_id: MICRODOSE_USER_ID,
+      session_id: MICRODOSE_SESSION_ID,
+      target_count: MICRODOSE_TARGET_COUNT,
+      timeout_s: 45,
+      query_context: { trigger: "chrome_extension_demo" },
+    }),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`autoscroll start failed: ${response.status} ${detail}`);
+  }
+
+  const payload = await response.json();
+  state.microdoseRunId = payload.run?.run_id ?? null;
+  state.microdoseRunStatus = payload.run?.status ?? "running";
+  state.microdoseReadyCount = 0;
+  broadcastStatus();
+  pollMicrodoseFeed({ openWhenReady: false }).catch(() => {});
+  return getStatus();
+}
+
+async function pollMicrodoseFeed({ openWhenReady }) {
+  const items = await fetchMicrodoseItems();
+  state.microdoseReadyCount = items.length;
+  state.microdoseLastError = null;
+
+  const runId = items[0]?.run_id ?? state.microdoseRunId;
+  if (
+    openWhenReady &&
+    items.length >= MICRODOSE_TARGET_COUNT &&
+    runId &&
+    state.microdoseLastOpenedRunId !== runId
+  ) {
+    state.microdoseLastOpenedRunId = runId;
+    await openMicrodoseFeed();
+  }
+
+  broadcastStatus();
+  return { status: getStatus(), items };
+}
+
+async function fetchMicrodoseItems() {
+  const url = new URL(`${BACKEND_URL}/feed/microdose`);
+  url.searchParams.set("user_id", MICRODOSE_USER_ID);
+  url.searchParams.set("session_id", MICRODOSE_SESSION_ID);
+  url.searchParams.set("limit", String(MICRODOSE_TARGET_COUNT));
+
+  const response = await fetch(url.toString());
+  if (!response.ok) {
+    throw new Error(`microdose feed failed: ${response.status}`);
+  }
+  const payload = await response.json();
+  return payload.items ?? [];
+}
+
+async function updateMicrodoseItem(queueId, status) {
+  const response = await fetch(`${BACKEND_URL}/feed/microdose/${queueId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status }),
+  });
+  if (!response.ok) {
+    throw new Error(`microdose item update failed: ${response.status}`);
+  }
+  return response.json();
+}
+
+async function openMicrodoseFeed() {
+  await chrome.windows.create({
+    url: chrome.runtime.getURL("feed.html"),
+    type: "popup",
+    width: 520,
+    height: 760,
+    focused: true,
+  });
 }
 
 // ── Mode management ────────────────────────────────────────────────────────
@@ -178,6 +286,49 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     sendResponse(getStatus());
     return true;
   }
+
+  if (msg.type === "start_microdose") {
+    startMicrodoseRun()
+      .then((status) => sendResponse({ ok: true, status }))
+      .catch((error) => {
+        state.microdoseLastError = String(error);
+        broadcastStatus();
+        sendResponse({ ok: false, error: String(error), status: getStatus() });
+      });
+    return true;
+  }
+
+  if (msg.type === "poll_microdose_feed") {
+    pollMicrodoseFeed({ openWhenReady: false })
+      .then((result) => sendResponse({ ok: true, ...result }))
+      .catch((error) => {
+        state.microdoseLastError = String(error);
+        broadcastStatus();
+        sendResponse({ ok: false, error: String(error), status: getStatus(), items: [] });
+      });
+    return true;
+  }
+
+  if (msg.type === "open_microdose_feed") {
+    openMicrodoseFeed()
+      .then(() => sendResponse({ ok: true }))
+      .catch((error) => sendResponse({ ok: false, error: String(error) }));
+    return true;
+  }
+
+  if (msg.type === "get_microdose_feed") {
+    fetchMicrodoseItems()
+      .then((items) => sendResponse({ ok: true, items, status: getStatus() }))
+      .catch((error) => sendResponse({ ok: false, error: String(error), items: [] }));
+    return true;
+  }
+
+  if (msg.type === "update_microdose_item") {
+    updateMicrodoseItem(msg.queueId, msg.status)
+      .then((item) => sendResponse({ ok: true, item }))
+      .catch((error) => sendResponse({ ok: false, error: String(error) }));
+    return true;
+  }
 });
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -191,6 +342,16 @@ function getStatus() {
     focusScore: state.focusScore,
     rewardScore: state.rewardScore,
     workTabId: state.workTabId,
+    microdose: {
+      backendUrl: BACKEND_URL,
+      userId: MICRODOSE_USER_ID,
+      sessionId: MICRODOSE_SESSION_ID,
+      targetCount: MICRODOSE_TARGET_COUNT,
+      readyCount: state.microdoseReadyCount,
+      runId: state.microdoseRunId,
+      runStatus: state.microdoseRunStatus,
+      lastError: state.microdoseLastError,
+    },
   };
 }
 
@@ -203,4 +364,5 @@ globalThis.dopamaxxGetStatus = getStatus;
 // ── Init ───────────────────────────────────────────────────────────────────
 
 connectWebSocket();
+chrome.alarms.create(MICRODOSE_POLL_ALARM, { periodInMinutes: 0.1 });
 importScripts("locked_out_capture/background.js");
