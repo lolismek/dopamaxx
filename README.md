@@ -2,27 +2,25 @@
 
 **Work harder, play harder. Then let the EEG decide what "play" means.**
 
-DopaMAXX is a slightly ridiculous, very real EEG-driven experiment: what if your
-focus app could learn exactly what kind of brain-rot your brain wants, then dose
-it back to you with precision? A DSI-24 EEG cap streams live brain signals, a
-Chrome extension watches what the user pauses on in X/Twitter, and a
-Supabase-backed recommendation system learns which posts produce positive
-focus/reward responses. When the user starts drifting during a work session,
-DopaMAXX serves a tiny "microdose" of content predicted to spike engagement,
-then sends them back to work.
+DopaMAXX is an EEG-driven experiment in personalized reward control: what if
+your focus app could learn what kind of content your brain actually responds to,
+serve it back with precision, and then get you back to work? A DSI-24 EEG cap
+streams live brain signals, a Chrome extension watches what the user pauses on
+in X/Twitter, and a Supabase-backed recommendation system learns which posts
+produce positive focus/reward responses. When the user starts drifting during a
+work session, DopaMAXX serves a tiny "microdose" of content predicted to spike
+engagement, then sends them back to work.
 
 Built for a hackathon by **zane, casper, ansh, and alex**.
-
-![DopaMAXX Chrome extension popup](attached_assets/Screenshot_2026-06-07_at_2.52.40_PM_1780858362454.png)
 
 ## What It Does
 
 DopaMAXX has two modes. In **Locked Out**, the user is allowed to scroll
 X/Twitter. The extension detects the post they actually dwell on, pairs that
 post with the user's live EEG-derived reward/focus state, and stores the result
-as a labeled memory: hit, miss, or neutral. This is the intentionally
-brain-rotty part: the hackathon version tries to learn what produces the biggest
-reward signal.
+as a labeled memory: hit, miss, or neutral. This is the intentionally unserious
+hackathon part: the demo tries to learn what produces the biggest reward signal,
+even when that means learning the user's favorite flavor of brain rot.
 
 In **Locked In**, distracting sites are blocked while the EEG stream monitors
 whether the user is still focused. If focus drops, DopaMAXX runs a
