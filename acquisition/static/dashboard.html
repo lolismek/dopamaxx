@@ -5,24 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>DopaMAXX Acquisition</title>
   <style>
-    /* ── BRAUN / DIETER RAMS ─────────────────────────────────────────────────
-       Less, but better. No decoration — every pixel carries meaning.
-       Warm cream field, near-black ink, one purposeful orange accent.
-       Instrument displays: dark with phosphor, housed in cream panels.
+    /* ── DOPAMAXX — DARK FIELD ──────────────────────────────────────────────
+       Matches the DopaMAXX companion app: near-black warm chassis,
+       white text, single orange accent, green live indicator.
+       Instrument principle retained: phosphor displays inside dark panels.
     ── */
     :root {
-      --bg:       #E4E1DA;   /* Braun cream chassis                  */
-      --panel:    #F2F0EB;   /* panel face                           */
-      --panel-2:  #E9E6DF;   /* recessed panel head                  */
-      --surface:  #FAFAF8;   /* form element surface                 */
-      --text:     #161412;   /* near-black ink                       */
-      --sub:      #6A6660;   /* secondary label                      */
-      --line:     #C4C0B8;   /* separator / border                   */
-      --accent:   #C84E14;   /* Braun signal orange — use sparingly  */
-      --good:     #1A6830;   /* confirmed-OK green                   */
-      --warn:     #8C6010;   /* amber caution                        */
-      --bad:      #9A1A14;   /* fault red                            */
-      --scope-bg: #0C0C0A;   /* phosphor display background          */
+      --bg:       #111009;   /* near-black warm chassis              */
+      --panel:    #1C1A12;   /* panel face                           */
+      --panel-2:  #141209;   /* recessed panel head                  */
+      --surface:  #221F16;   /* slightly elevated surface            */
+      --text:     #F0EDE4;   /* near-white                           */
+      --sub:      #68634E;   /* secondary label                      */
+      --line:     #2C2820;   /* separator / border                   */
+      --accent:   #C84E14;   /* DopaMAXX orange — single accent      */
+      --good:     #1DB954;   /* live / confirmed-OK green            */
+      --warn:     #C89020;   /* amber caution                        */
+      --bad:      #C83232;   /* fault red                            */
+      --scope-bg: #090807;   /* phosphor display background          */
       --ph-eeg:   #1DB954;   /* phosphor green  — EEG               */
       --ph-emg:   #C89820;   /* phosphor amber  — EMG               */
       --ph-ecg:   #C83232;   /* phosphor red    — ECG               */
@@ -269,27 +269,24 @@
     .controls {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 1px;
-      background: var(--line);
-      padding: 0;
-      margin: 12px;
-      border: 1px solid var(--line);
+      gap: 8px;
+      padding: 12px;
     }
 
     button {
-      min-height: 34px;
-      border: none;
-      color: var(--text);
-      background: var(--surface);
+      min-height: 36px;
+      border: 1px solid var(--accent);
+      color: var(--accent);
+      background: transparent;
       font: inherit;
       font-size: 11px;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.10em;
       text-transform: uppercase;
       cursor: pointer;
-      transition: background 0.08s;
+      transition: background 0.08s, color 0.08s;
       border-radius: 0;
     }
-    button:hover { background: var(--panel-2); color: var(--accent); }
+    button:hover { background: var(--accent); color: var(--text); }
 
     .sim-msg {
       padding: 0 12px 12px;
@@ -551,24 +548,24 @@
 <script>
   // ─── PALETTE (mirrors CSS variables for canvas draw calls) ────────────────
   const P = {
-    bg:      '#E4E1DA',
-    panel:   '#F2F0EB',
-    panel2:  '#E9E6DF',
-    surface: '#FAFAF8',
-    text:    '#161412',
-    sub:     '#6A6660',
-    line:    '#C4C0B8',
+    bg:      '#111009',
+    panel:   '#1C1A12',
+    panel2:  '#141209',
+    surface: '#221F16',
+    text:    '#F0EDE4',
+    sub:     '#68634E',
+    line:    '#2C2820',
     accent:  '#C84E14',
-    good:    '#1A6830',
-    warn:    '#8C6010',
-    bad:     '#9A1A14',
-    scopeBg: '#0C0C0A',
+    good:    '#1DB954',
+    warn:    '#C89020',
+    bad:     '#C83232',
+    scopeBg: '#090807',
     phEEG:   '#1DB954',   // phosphor green
     phEMG:   '#C89820',   // phosphor amber
     phECG:   '#C83232',   // phosphor red
-    gridDk:  'rgba(48,44,36,.45)',  // grid on dark scopes
-    gridLt:  'rgba(190,186,178,.6)', // grid on light charts
-    emgCh:   ['#C89820','#C86018','#3A6EA8','#7A5E9A'],
+    gridDk:  'rgba(48,44,28,.55)',  // grid on dark scopes
+    gridLt:  'rgba(44,40,32,.5)',   // grid on dark charts
+    emgCh:   ['#C89820','#C86018','#3A88C8','#8A68B8'],
   };
 
   // ─── STATE ────────────────────────────────────────────────────────────────
@@ -709,7 +706,7 @@
     for(let j=1;j<rows;j++){ctx.beginPath();ctx.moveTo(0,j*(h/rows));ctx.lineTo(w,j*(h/rows));ctx.stroke();}
   }
 
-  // Light chart grid (paper / cream)
+  // Dark chart grid (matches DopaMAXX dark surface)
   function chartGrid(ctx,w,h,cols=10,rows=4){
     ctx.fillStyle=P.surface; ctx.fillRect(0,0,w,h);
     ctx.strokeStyle=P.gridLt; ctx.lineWidth=1;
