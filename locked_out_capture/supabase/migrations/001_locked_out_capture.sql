@@ -12,7 +12,7 @@ create table if not exists public.posts (
   text text,
   media jsonb not null default '[]'::jsonb,
   raw_capture jsonb not null default '{}'::jsonb,
-  embedding vector(1536),
+  embedding extensions.vector(1536),
   embedding_model text,
   embedding_status text not null default 'pending'
     check (embedding_status in ('pending', 'complete', 'failed')),
@@ -47,7 +47,7 @@ create index if not exists posts_platform_post_id_idx
 
 create index if not exists posts_embedding_cosine_idx
   on public.posts
-  using ivfflat (embedding vector_cosine_ops)
+  using ivfflat (embedding extensions.vector_cosine_ops)
   with (lists = 100)
   where embedding is not null;
 
@@ -74,7 +74,7 @@ for each row execute function public.set_updated_at();
 
 create or replace function public.match_user_hit_posts(
   query_user_id text,
-  query_embedding vector(1536),
+  query_embedding extensions.vector(1536),
   match_count int default 10
 )
 returns table (
@@ -118,9 +118,9 @@ as $$
     h.author_handle,
     h.author_name,
     h.text,
-    1 - (h.embedding <=> query_embedding) as similarity,
+    1 - (h.embedding OPERATOR(extensions.<=>) query_embedding) as similarity,
     h.max_reward_score
   from hit_posts h
-  order by h.embedding <=> query_embedding
+  order by h.embedding OPERATOR(extensions.<=>) query_embedding
   limit greatest(match_count, 1);
 $$;
