@@ -6,787 +6,1178 @@
   <title>DopaMAXX Acquisition</title>
   <style>
     :root {
-      --bg: #101214;
-      --panel: #181c20;
-      --panel-2: #20262b;
-      --text: #f2f5f7;
-      --muted: #9aa7b1;
-      --line: #2e3840;
-      --accent: #41d6b1;
-      --warn: #f6c85f;
-      --bad: #ff6b6b;
-      --blue: #72a7ff;
+      --bg: #0c0e10;
+      --panel: #131619;
+      --panel-2: #1a1f24;
+      --text: #f0f4f7;
+      --muted: #8a97a3;
+      --line: #252e36;
+      --accent: #35d6aa;
+      --warn: #f5c842;
+      --bad: #ff5f5f;
+      --blue: #6eaaff;
+      --purple: #b48cff;
+      --orange: #ff9a45;
+      --ecg: #ff6b9d;
+      --emg: #f5c842;
+      --sidebar: 300px;
     }
-
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      margin: 0;
       min-height: 100vh;
       background: var(--bg);
       color: var(--text);
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      font-size: 13px;
     }
 
     main {
-      width: min(1500px, calc(100vw - 32px));
+      width: min(1800px, calc(100vw - 16px));
       margin: 0 auto;
-      padding: 20px 0 28px;
+      padding: 14px 0 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
     }
 
+    /* ── HEADER ── */
     header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 16px;
-      margin-bottom: 14px;
+      gap: 12px;
     }
-
-    h1 {
-      margin: 0;
-      font-size: 22px;
-      font-weight: 700;
-      letter-spacing: 0;
-    }
+    h1 { font-size: 19px; font-weight: 700; letter-spacing: -0.01em; }
 
     .status-row {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      flex-wrap: wrap;
+      display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
       justify-content: flex-end;
     }
-
     .badge {
-      min-height: 28px;
-      display: inline-flex;
-      align-items: center;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      padding: 4px 9px;
-      color: var(--muted);
-      background: var(--panel);
-      font-size: 13px;
+      display: inline-flex; align-items: center; gap: 5px;
+      border: 1px solid var(--line); border-radius: 5px;
+      padding: 3px 8px; color: var(--muted); background: var(--panel);
+      font-size: 12px; white-space: nowrap;
     }
+    .badge.good  { color: var(--accent); border-color: rgba(53,214,170,.3); }
+    .badge.warn  { color: var(--warn);   border-color: rgba(245,200,66,.3); }
+    .badge.bad   { color: var(--bad);    border-color: rgba(255,95,95,.3);  }
+    .badge.blue  { color: var(--blue);   border-color: rgba(110,170,255,.3);}
 
-    .badge.good {
-      color: var(--accent);
-      border-color: rgba(65, 214, 177, 0.35);
-    }
-
-    .badge.warn {
-      color: var(--warn);
-      border-color: rgba(246, 200, 95, 0.35);
-    }
-
-    .badge.bad {
-      color: var(--bad);
-      border-color: rgba(255, 107, 107, 0.35);
-    }
-
-    .grid {
+    /* ── METRIC CARDS ROW ── */
+    .metrics-row {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) 360px;
-      gap: 14px;
+      grid-template-columns: repeat(4, minmax(0,1fr));
+      gap: 10px;
+    }
+    .metric-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px 14px 13px;
+    }
+    .metric-card .mc-label {
+      font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+      color: var(--muted); margin-bottom: 6px;
+    }
+    .metric-card .mc-value {
+      font-size: 28px; font-weight: 700; line-height: 1;
+      margin-bottom: 5px;
+    }
+    .metric-card .mc-sub {
+      font-size: 11px; color: var(--muted);
+    }
+    .metric-card .mc-bar {
+      margin-top: 8px; height: 5px; border-radius: 999px;
+      background: var(--line); overflow: hidden;
+    }
+    .metric-card .mc-bar-fill {
+      height: 100%; border-radius: inherit;
+      background: var(--accent); transition: width .2s linear;
+    }
+
+    /* ── MAIN GRID ── */
+    .main-grid {
+      display: grid;
+      grid-template-columns: var(--sidebar) minmax(0,1fr) var(--sidebar);
+      gap: 10px;
       align-items: start;
     }
 
+    .col { display: flex; flex-direction: column; gap: 10px; }
+
+    /* ── PANELS ── */
     section {
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 8px;
       overflow: hidden;
     }
-
     .panel-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      padding: 12px 14px;
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 10px; padding: 9px 12px;
       border-bottom: 1px solid var(--line);
       background: var(--panel-2);
     }
+    .panel-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+    .panel-tag   { font-size: 11px; color: var(--muted); }
 
-    .panel-title {
-      font-size: 14px;
-      font-weight: 700;
+    /* ── CANVAS WRAPPERS ── */
+    .canvas-wrap {
+      padding: 8px 10px 10px;
+      background: #0a0c0e;
     }
+    canvas { width: 100%; display: block; border-radius: 4px; background: transparent; }
 
-    .metric-row {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 8px;
-      padding: 12px 14px;
-      border-bottom: 1px solid var(--line);
+    /* ── SCORES CHART ── */
+    .scores-canvas  { height: 130px; }
+    /* ── BANDS CHART ── */
+    .bands-canvas   { height: 100px; }
+    /* ── POSTURE EMG CHART (processed) ── */
+    .emg-chart-canvas  { height: 90px; }
+    /* ── ECG CONTEXT CHART ── */
+    .ecg-ctx-canvas { height: 90px; }
+
+    /* ── RAW EEG MONITOR ── */
+    .raw-eeg-canvas {
+      height: clamp(420px, 50vh, 640px);
     }
+    /* ── RAW POSTURE EMG MONITOR ── */
+    .raw-emg-canvas { height: 160px; }
+    /* ── RAW ECG MONITOR ── */
+    .raw-ecg-canvas { height: 120px; }
 
-    .metric {
-      min-height: 58px;
-      padding: 9px;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: #14181b;
-    }
+    /* ── TOPOMAP ── */
+    .topo-canvas { aspect-ratio: 1/1; }
 
-    .metric label {
-      display: block;
-      color: var(--muted);
-      font-size: 12px;
-      margin-bottom: 6px;
-    }
-
-    .metric strong {
-      font-size: 20px;
-      font-weight: 700;
-    }
-
-    .scope-wrap {
-      width: 100%;
-      height: min(68vh, 760px);
-      min-height: 520px;
-      padding: 10px 12px 12px;
-    }
-
-    .topo-wrap {
-      width: 100%;
-      aspect-ratio: 1 / 1;
-      padding: 12px 14px 14px;
-    }
-
-    canvas {
-      width: 100%;
-      height: 100%;
-      display: block;
-      border-radius: 6px;
-      background: #0d0f11;
-    }
-
-    aside {
-      display: grid;
-      gap: 14px;
-    }
-
-    .side-body {
-      padding: 12px 14px 14px;
-    }
-
-    .kv {
-      display: grid;
-      gap: 8px;
-      font-size: 13px;
-    }
-
+    /* ── KV LIST ── */
+    .kv { display: grid; gap: 0; font-size: 12px; }
     .kv div {
-      display: flex;
-      justify-content: space-between;
-      gap: 14px;
-      padding-bottom: 8px;
-      border-bottom: 1px solid rgba(46, 56, 64, 0.65);
+      display: flex; justify-content: space-between; gap: 12px;
+      padding: 6px 12px; border-bottom: 1px solid rgba(37,46,54,.7);
     }
+    .kv div:last-child { border-bottom: none; }
+    .kv span { color: var(--muted); }
+    .kv strong { text-align: right; font-weight: 600; }
 
-    .kv span {
-      color: var(--muted);
-    }
-
-    .controls {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-    }
-
-    .inference-body {
-      display: grid;
-      gap: 12px;
-      padding: 12px 14px 14px;
-    }
-
-    .score-block {
-      display: grid;
-      gap: 7px;
-    }
-
+    /* ── INFERENCE BODY ── */
+    .inference-body { padding: 10px 12px 12px; display: grid; gap: 10px; }
+    .score-block { display: grid; gap: 5px; }
     .score-line {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      font-size: 13px;
+      display: flex; align-items: center; justify-content: space-between;
+      font-size: 12px;
     }
-
-    .score-line span {
-      color: var(--muted);
-    }
-
+    .score-line span { color: var(--muted); }
     .bar {
-      position: relative;
-      height: 10px;
-      overflow: hidden;
-      border-radius: 999px;
-      background: #0d0f11;
-      border: 1px solid var(--line);
+      height: 8px; border-radius: 999px; background: #0a0c0e;
+      border: 1px solid var(--line); overflow: hidden; position: relative;
     }
-
     .bar-fill {
-      width: 0%;
-      height: 100%;
-      border-radius: inherit;
-      background: var(--accent);
-      transition: width 160ms linear, transform 160ms linear;
+      width: 0%; height: 100%; border-radius: inherit;
+      background: var(--accent); transition: width .18s linear;
     }
-
     .reward-bar .bar-fill {
-      margin-left: 50%;
-      width: 0%;
-      transform-origin: left center;
+      margin-left: 50%; width: 0%; transform-origin: left center;
       background: var(--warn);
     }
 
+    /* ── SIM CONTROLS ── */
+    .controls {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+      padding: 10px 12px 12px;
+    }
     button {
-      min-height: 36px;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      color: var(--text);
-      background: #14181b;
-      font: inherit;
-      font-size: 13px;
-      cursor: pointer;
+      min-height: 32px; border: 1px solid var(--line); border-radius: 5px;
+      color: var(--text); background: #0e1114; font: inherit; font-size: 12px;
+      cursor: pointer; transition: border-color .12s;
     }
+    button:hover { border-color: var(--blue); background: #13191e; }
+    .sim-msg { padding: 0 12px 10px; color: var(--muted); font-size: 12px; min-height: 28px; }
 
-    button:hover {
-      border-color: var(--blue);
-      background: #1b2228;
+    /* ── SCROLLBAR ── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 99px; }
+
+    @media (max-width: 1100px) {
+      :root { --sidebar: 260px; }
     }
-
-    .message {
-      min-height: 42px;
-      margin-top: 10px;
-      color: var(--muted);
-      font-size: 13px;
-      line-height: 1.45;
+    @media (max-width: 800px) {
+      .main-grid { grid-template-columns: 1fr; }
+      .metrics-row { grid-template-columns: 1fr 1fr; }
     }
-
-    @media (max-width: 980px) {
-      main {
-        width: min(100vw - 20px, 760px);
-      }
-
-      header {
-        align-items: flex-start;
-        flex-direction: column;
-      }
-
-      .status-row {
-        justify-content: flex-start;
-      }
-
-      .grid {
-        grid-template-columns: 1fr;
-      }
-
-      .metric-row {
-        grid-template-columns: 1fr;
-      }
-
-      .scope-wrap {
-        min-height: 500px;
-        height: 64vh;
-      }
-
-      .topo-wrap {
-        max-width: 520px;
-      }
+    @media (max-width: 420px) {
+      .metrics-row { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
-  <main>
-    <header>
-      <h1>DopaMAXX Acquisition</h1>
-      <div class="status-row">
-        <span id="sourceBadge" class="badge">source</span>
-        <span id="statusBadge" class="badge">starting</span>
-        <span id="streamBadge" class="badge">DSI24-EEG</span>
-      </div>
-    </header>
+<main>
+  <!-- ── HEADER ── -->
+  <header>
+    <h1>DopaMAXX Acquisition</h1>
+    <div class="status-row">
+      <span id="sourceBadge" class="badge">source</span>
+      <span id="statusBadge" class="badge">starting</span>
+      <span id="streamBadge" class="badge">DSI24-EEG</span>
+      <span id="rateBadge"   class="badge blue" title="EEG sample rate">— Hz</span>
+      <span id="hrBadge"     class="badge" title="Heart rate (simulated)">♥ — BPM</span>
+    </div>
+  </header>
 
-    <div class="grid">
+  <!-- ── METRIC CARDS ── -->
+  <div class="metrics-row">
+    <div class="metric-card">
+      <div class="mc-label">Focus</div>
+      <div class="mc-value" id="mcFocus" style="color:var(--accent)">—</div>
+      <div class="mc-bar"><div class="mc-bar-fill" id="mcFocusBar" style="background:var(--accent)"></div></div>
+      <div class="mc-sub" id="mcFocusMood">waiting…</div>
+    </div>
+    <div class="metric-card">
+      <div class="mc-label">Fatigue</div>
+      <div class="mc-value" id="mcFatigue" style="color:var(--warn)">—</div>
+      <div class="mc-bar"><div class="mc-bar-fill" id="mcFatigueBar" style="background:var(--warn)"></div></div>
+      <div class="mc-sub" id="mcFatigueMood">waiting…</div>
+    </div>
+    <div class="metric-card">
+      <div class="mc-label">EMG Strain <span style="font-size:10px;color:var(--muted)">(sim)</span></div>
+      <div class="mc-value" id="mcEMG" style="color:var(--emg)">—</div>
+      <div class="mc-bar"><div class="mc-bar-fill" id="mcEMGBar" style="background:var(--emg)"></div></div>
+      <div class="mc-sub" id="mcEMGMood">waiting…</div>
+    </div>
+    <div class="metric-card">
+      <div class="mc-label">Signal Quality</div>
+      <div class="mc-value" id="mcQuality" style="color:var(--accent)">—</div>
+      <div class="mc-bar"><div class="mc-bar-fill" id="mcQualityBar"></div></div>
+      <div class="mc-sub" id="mcQualitySub">flat: 0 · clipping: 0</div>
+    </div>
+  </div>
+
+  <!-- ── MAIN GRID ── -->
+  <div class="main-grid">
+
+    <!-- LEFT COLUMN: time-series charts -->
+    <div class="col">
+
       <section>
         <div class="panel-head">
-          <div class="panel-title">Live EEG</div>
-          <div id="channelCount" class="badge">19 channels</div>
+          <div class="panel-title">Scores</div>
+          <div class="panel-tag">focus · reward · 60 s</div>
         </div>
-        <div class="metric-row">
-          <div class="metric">
-            <label>Effective rate</label>
-            <strong id="rate">0.0 Hz</strong>
-          </div>
-          <div class="metric">
-            <label>Buffered samples</label>
-            <strong id="buffered">0</strong>
-          </div>
-          <div class="metric">
-            <label>Latest age</label>
-            <strong id="age">n/a</strong>
-          </div>
-        </div>
-        <div class="scope-wrap">
-          <canvas id="scope"></canvas>
+        <div class="canvas-wrap">
+          <canvas id="scoresChart" class="scores-canvas"></canvas>
         </div>
       </section>
 
-      <aside>
-        <section>
-          <div class="panel-head">
-            <div class="panel-title">Live Inference</div>
-            <div id="inferenceStatus" class="badge">waiting</div>
-          </div>
-          <div class="inference-body">
-            <div class="score-block">
-              <div class="score-line">
-                <span>Focus</span>
-                <strong id="focusScore">n/a</strong>
-              </div>
-              <div class="bar">
-                <div id="focusFill" class="bar-fill"></div>
-              </div>
-              <div class="score-line">
-                <span>Mood</span>
-                <strong id="focusMood">unknown</strong>
-              </div>
-            </div>
+      <section>
+        <div class="panel-head">
+          <div class="panel-title">EEG Bands</div>
+          <span id="dominantBandBadge" class="badge">—</span>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="bandsChart" class="bands-canvas"></canvas>
+        </div>
+      </section>
 
-            <div class="score-block">
-              <div class="score-line">
-                <span>Reward</span>
-                <strong id="rewardScore">n/a</strong>
-              </div>
-              <div class="bar reward-bar">
-                <div id="rewardFill" class="bar-fill"></div>
-              </div>
-              <div class="score-line">
-                <span>Verdict</span>
-                <strong id="rewardMood">unknown</strong>
-              </div>
-            </div>
+      <section>
+        <div class="panel-head">
+          <div class="panel-title">Posture EMG</div>
+          <div class="panel-tag">envelope · 30 s · sim</div>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="emgChart" class="emg-chart-canvas"></canvas>
+        </div>
+      </section>
 
-            <div class="kv">
-              <div><span>Dominant band</span><strong id="dominantBand">unknown</strong></div>
-              <div><span>Engagement</span><strong id="engagementIndex">n/a</strong></div>
-              <div><span>FAA</span><strong id="alphaAsymmetry">n/a</strong></div>
-            </div>
-          </div>
-        </section>
+      <section>
+        <div class="panel-head">
+          <div class="panel-title">ECG Context</div>
+          <div class="panel-tag">HR trend · 60 s · sim</div>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="ecgCtxChart" class="ecg-ctx-canvas"></canvas>
+        </div>
+      </section>
 
-        <section>
-          <div class="panel-head">
-            <div class="panel-title">Brain Topology</div>
-            <div id="topoScale" class="badge">activity</div>
+      <!-- Live Inference detail -->
+      <section>
+        <div class="panel-head">
+          <div class="panel-title">Live Inference</div>
+          <span id="inferenceStatus" class="badge">waiting</span>
+        </div>
+        <div class="inference-body">
+          <div class="score-block">
+            <div class="score-line"><span>Focus</span><strong id="focusScore">n/a</strong></div>
+            <div class="bar"><div id="focusFill" class="bar-fill"></div></div>
+            <div class="score-line"><span>Mood</span><strong id="focusMood">unknown</strong></div>
           </div>
-          <div class="topo-wrap">
-            <canvas id="topomap"></canvas>
+          <div class="score-block">
+            <div class="score-line"><span>Reward</span><strong id="rewardScore">n/a</strong></div>
+            <div class="bar reward-bar"><div id="rewardFill" class="bar-fill"></div></div>
+            <div class="score-line"><span>Verdict</span><strong id="rewardMood">unknown</strong></div>
           </div>
-        </section>
+        </div>
+        <div class="kv">
+          <div><span>Dominant band</span><strong id="dominantBand">—</strong></div>
+          <div><span>Engagement idx</span><strong id="engagementIndex">—</strong></div>
+          <div><span>Frontal alpha</span><strong id="frontalAlpha">—</strong></div>
+          <div><span>FAA</span><strong id="alphaAsymmetry">—</strong></div>
+          <div><span>Rel θ / α / β</span><strong id="relBands">—</strong></div>
+        </div>
+      </section>
 
-        <section>
-          <div class="panel-head">
-            <div class="panel-title">Connection</div>
-          </div>
-          <div class="side-body">
-            <div class="kv">
-              <div><span>Stream</span><strong id="streamName">DSI24-EEG</strong></div>
-              <div><span>Sample rate</span><strong id="sampleRate">300 Hz</strong></div>
-              <div><span>Flat channels</span><strong id="flatChannels">0</strong></div>
-              <div><span>Clipping flags</span><strong id="clipChannels">0</strong></div>
-            </div>
-            <div id="message" class="message"></div>
-          </div>
-        </section>
-
-        <section>
-          <div class="panel-head">
-            <div class="panel-title">Simulator Injection</div>
-          </div>
-          <div class="side-body">
-            <div class="controls">
-              <button data-state="Focused">Focused</button>
-              <button data-state="Drifting">Drifting</button>
-              <button data-state="Reward Hit">Reward Hit</button>
-              <button data-state="Reward Miss">Reward Miss</button>
-              <button data-state="Neutral">Neutral</button>
-            </div>
-            <div id="injectMessage" class="message"></div>
-          </div>
-        </section>
-      </aside>
     </div>
-  </main>
 
-  <script>
-    const canvas = document.getElementById("scope");
-    const ctx = canvas.getContext("2d");
-    const topoCanvas = document.getElementById("topomap");
-    const topoCtx = topoCanvas.getContext("2d");
-    let lastFrame = null;
-    let reconnectTimer = null;
-    let topoSmoothed = null;
+    <!-- CENTER COLUMN: raw monitors -->
+    <div class="col">
 
-    const topoPositions = {
-      Fp1: [-0.34, -0.88], Fp2: [0.34, -0.88],
-      F7: [-0.78, -0.48], F3: [-0.42, -0.46], Fz: [0.00, -0.48], F4: [0.42, -0.46], F8: [0.78, -0.48],
-      T3: [-0.92, 0.00], C3: [-0.46, 0.00], Cz: [0.00, 0.00], C4: [0.46, 0.00], T4: [0.92, 0.00],
-      T5: [-0.78, 0.48], P3: [-0.42, 0.46], Pz: [0.00, 0.48], P4: [0.42, 0.46], T6: [0.78, 0.48],
-      O1: [-0.34, 0.86], O2: [0.34, 0.86]
+      <section>
+        <div class="panel-head">
+          <div class="panel-title">Raw EEG Monitor</div>
+          <div style="display:flex;gap:6px">
+            <span id="channelCount" class="badge">19 ch</span>
+            <span id="bufferedBadge" class="badge">0 smp</span>
+            <span id="ageBadge" class="badge">— ms</span>
+          </div>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="scopeEEG" class="raw-eeg-canvas"></canvas>
+        </div>
+      </section>
+
+      <section>
+        <div class="panel-head">
+          <div class="panel-title">Raw Posture EMG Monitor</div>
+          <div style="display:flex;gap:6px">
+            <span class="badge warn">simulated</span>
+            <span class="badge">4 ch · 1 kHz</span>
+          </div>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="scopeEMG" class="raw-emg-canvas"></canvas>
+        </div>
+      </section>
+
+      <section>
+        <div class="panel-head">
+          <div class="panel-title">Raw ECG Monitor</div>
+          <div style="display:flex;gap:6px">
+            <span class="badge warn">simulated</span>
+            <span id="ecgRateBadge" class="badge ecg-badge">— BPM</span>
+          </div>
+        </div>
+        <div class="canvas-wrap">
+          <canvas id="scopeECG" class="raw-ecg-canvas"></canvas>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- RIGHT COLUMN: brain map + status -->
+    <div class="col">
+
+      <section>
+        <div class="panel-head">
+          <div class="panel-title">EEG Brain Map</div>
+          <span id="topoScale" class="badge">activity</span>
+        </div>
+        <div class="canvas-wrap" style="padding:10px;">
+          <canvas id="topomap" class="topo-canvas"></canvas>
+        </div>
+      </section>
+
+      <section>
+        <div class="panel-head">
+          <div class="panel-title">Stream / Status</div>
+        </div>
+        <div class="kv">
+          <div><span>Stream name</span><strong id="streamName">DSI24-EEG</strong></div>
+          <div><span>Sample rate</span><strong id="sampleRate">300 Hz</strong></div>
+          <div><span>Channels</span><strong id="channelCountKV">19</strong></div>
+          <div><span>Buffer samples</span><strong id="bufferSamples">—</strong></div>
+          <div><span>Window</span><strong id="windowS">—</strong></div>
+          <div><span>Frame samples</span><strong id="frameSamples">—</strong></div>
+          <div><span>Latest age</span><strong id="latestAge">—</strong></div>
+          <div><span>Effective rate</span><strong id="effectiveRate">—</strong></div>
+          <div><span>Flat channels</span><strong id="flatChannels">0</strong></div>
+          <div><span>Clipping flags</span><strong id="clipChannels">0</strong></div>
+          <div><span>Source mode</span><strong id="sourceMode">—</strong></div>
+        </div>
+        <div id="statusMessage" style="padding:8px 12px;font-size:11px;color:var(--muted);min-height:24px;"></div>
+      </section>
+
+      <section>
+        <div class="panel-head">
+          <div class="panel-title">Simulator Injection</div>
+        </div>
+        <div class="controls">
+          <button data-state="Focused">Focused</button>
+          <button data-state="Drifting">Drifting</button>
+          <button data-state="Reward Hit">Reward Hit</button>
+          <button data-state="Reward Miss">Reward Miss</button>
+          <button data-state="Neutral">Neutral</button>
+        </div>
+        <div id="injectMessage" class="sim-msg"></div>
+      </section>
+
+    </div>
+  </div>
+</main>
+
+<script>
+  // ─── STATE ───────────────────────────────────────────────────────────────
+  let lastFrame       = null;
+  let reconnectTimer  = null;
+  let topoSmoothed    = null;
+  const HIST_LEN      = 600;   // ~60 s at 10 fps
+  const EMG_HIST_LEN  = 300;   // ~30 s
+  const ECG_HIST_LEN  = 600;
+  const focusHistory  = [];
+  const rewardHistory = [];
+  const emgEnvHistory = [];    // per-channel EMG envelope history
+  const ecgHRHistory  = [];    // HR values over time
+  let simTime         = 0;     // wall-clock seconds for synthetic signals
+  let lastAnimT       = null;
+
+  // ─── ECG SIMULATION ──────────────────────────────────────────────────────
+  // PQRST morphology
+  function pqrst(t) {
+    const p  =  0.18  * Math.exp(-((t - 0.14) ** 2) / (2 * 0.013 ** 2));
+    const q  = -0.085 * Math.exp(-((t - 0.295) ** 2) / (2 * 0.0035 ** 2));
+    const r  =  1.40  * Math.exp(-((t - 0.320) ** 2) / (2 * 0.005  ** 2));
+    const s  = -0.22  * Math.exp(-((t - 0.348) ** 2) / (2 * 0.005  ** 2));
+    const tw =  0.30  * Math.exp(-((t - 0.60)  ** 2) / (2 * 0.030  ** 2));
+    return p + q + r + s + tw;
+  }
+
+  // HR varies slowly between 58-78 BPM
+  function currentHR(t) {
+    return 68 + 10 * Math.sin(t * 0.04) + 3 * Math.sin(t * 0.11);
+  }
+
+  // Returns ECG amplitude at absolute time t (seconds)
+  const ecgPhase = { acc: 0, lastT: 0 };
+  function ecgAt(t) {
+    const dt = t - ecgPhase.lastT;
+    ecgPhase.lastT = t;
+    const hr  = currentHR(t);
+    const period = 60 / hr;
+    ecgPhase.acc = (ecgPhase.acc + dt / period) % 1;
+    const noise = (Math.random() - 0.5) * 0.02;
+    return pqrst(ecgPhase.acc) + noise;
+  }
+
+  // ─── EMG SIMULATION ──────────────────────────────────────────────────────
+  const EMG_LABELS = ['U.Trap L', 'U.Trap R', 'L.Trap L', 'L.Trap R'];
+  let emgPhase = 0;
+  // Returns 4-channel EMG sample at time t
+  function emgSample(t, strainLevel) {
+    const base = 0.15 + strainLevel * 0.6;
+    const out = [];
+    for (let ch = 0; ch < 4; ch++) {
+      // High-freq muscle noise with amplitude envelope modulated by "strain"
+      const burst = 0.3 * (Math.sin(2 * Math.PI * 37 * t + ch) > 0.6 ? 1 : 0);
+      const noise = (Math.random() - 0.5) * 2 * (base + burst);
+      out.push(noise);
+    }
+    return out;
+  }
+
+  // ─── RING BUFFERS (raw waveform scrollers) ───────────────────────────────
+  const EEG_RAW_LEN = 1500;  // samples retained for raw EEG scope
+  const EMG_RAW_LEN = 2000;  // ~2 s at 1 kHz
+  const ECG_RAW_LEN = 1500;
+  const rawEEGBuf   = [];    // Array of channel arrays
+  const rawEMGBuf   = [[], [], [], []];
+  const rawECGBuf   = [];
+
+  function pushRawEEG(channels, newT) {
+    // channels is array of arrays (per-channel over the new window)
+    if (!channels.length) return;
+    const n = channels[0].length;
+    for (let i = 0; i < n; i++) {
+      const sample = channels.map(ch => ch[i] ?? 0);
+      rawEEGBuf.push(sample);
+      if (rawEEGBuf.length > EEG_RAW_LEN) rawEEGBuf.shift();
+    }
+  }
+
+  // ─── TOPOMAP ─────────────────────────────────────────────────────────────
+  const topoPositions = {
+    Fp1: [-0.34,-0.88], Fp2:[0.34,-0.88],
+    F7:[-0.78,-0.48], F3:[-0.42,-0.46], Fz:[0,-0.48], F4:[0.42,-0.46], F8:[0.78,-0.48],
+    T3:[-0.92,0], C3:[-0.46,0], Cz:[0,0], C4:[0.46,0], T4:[0.92,0],
+    T5:[-0.78,0.48], P3:[-0.42,0.46], Pz:[0,0.48], P4:[0.42,0.46], T6:[0.78,0.48],
+    O1:[-0.34,0.86], O2:[0.34,0.86]
+  };
+
+  // ─── HELPERS ─────────────────────────────────────────────────────────────
+  function setBadge(id, text, kind) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = text;
+    el.className = `badge ${kind || ''}`.trim();
+  }
+  function fmt(v, d)    { return Number.isFinite(+v) ? (+v).toFixed(d) : '—'; }
+  function fmtSigned(v, d) {
+    if (!Number.isFinite(+v)) return '—';
+    const s = (+v).toFixed(d);
+    return +v > 0 ? '+' + s : s;
+  }
+  function label(v)     { return String(v||'—').replaceAll('_',' '); }
+
+  function channelStats(arr) {
+    let sum = 0, cnt = 0;
+    for (const v of arr) { if (Number.isFinite(v)) { sum += v; cnt++; } }
+    const mean = cnt ? sum/cnt : 0;
+    const devs = arr.filter(Number.isFinite).map(v => Math.abs(v-mean)).sort((a,b)=>a-b);
+    const p95  = devs.length ? devs[Math.floor(devs.length*0.95)] : 1;
+    return { mean, scale: Math.max(p95*3, 1e-9) };
+  }
+
+  function recentRMS(arr) {
+    const tail = arr.slice(Math.max(0, arr.length - 150)).filter(Number.isFinite);
+    if (!tail.length) return 0;
+    const mean = tail.reduce((a,b)=>a+b,0)/tail.length;
+    return Math.sqrt(tail.reduce((s,v)=>s+(v-mean)**2,0)/tail.length);
+  }
+
+  function robustScale(vals) {
+    if (!vals.length) return 1;
+    const s = vals.map(Math.abs).sort((a,b)=>a-b);
+    return Math.max(s[Math.min(s.length-1, Math.floor(s.length*0.9))], 1e-6);
+  }
+
+  function topoColor(v) {
+    v = Math.max(-1, Math.min(1, v));
+    const stops = [
+      [-1.0,[58,103,191]],[-0.35,[65,214,177]],[0,[13,15,17]],
+      [0.35,[245,200,66]],[1.0,[255,95,95]]
+    ];
+    for (let i = 0; i < stops.length-1; i++) {
+      const [av,ac] = stops[i], [bv,bc] = stops[i+1];
+      if (v >= av && v <= bv) {
+        const t = (v-av)/(bv-av);
+        return ac.map((c,j)=>Math.round(c+(bc[j]-c)*t));
+      }
+    }
+    return stops[stops.length-1][1];
+  }
+
+  function interpolateAt(x, y, labels, vals) {
+    let w = 0, tot = 0;
+    for (let i = 0; i < labels.length; i++) {
+      const pos = topoPositions[labels[i]]; if (!pos) continue;
+      const d2 = Math.max((x-pos[0])**2+(y-pos[1])**2, 0.0025);
+      const wt = 1/(d2**1.4);
+      w += vals[i]*wt; tot += wt;
+    }
+    return tot ? Math.max(-1,Math.min(1,w/tot)) : 0;
+  }
+
+  // ─── CANVAS HELPERS ──────────────────────────────────────────────────────
+  function setCanvasSize(canvas) {
+    const dpr = window.devicePixelRatio || 1;
+    const r   = canvas.getBoundingClientRect();
+    const w   = Math.max(40, Math.floor(r.width  * dpr));
+    const h   = Math.max(20, Math.floor(r.height * dpr));
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width  = w;
+      canvas.height = h;
+    }
+    return { w, h, dpr };
+  }
+
+  // Draw a dark background with grid lines
+  function drawGrid(ctx, w, h, dpr, cols=10, rows=4, color='rgba(37,46,54,.6)') {
+    ctx.fillStyle = '#080a0b';
+    ctx.fillRect(0,0,w,h);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+    for (let i=1;i<cols;i++) { ctx.beginPath(); ctx.moveTo(i*(w/cols),0); ctx.lineTo(i*(w/cols),h); ctx.stroke(); }
+    for (let j=1;j<rows;j++) { ctx.beginPath(); ctx.moveTo(0,j*(h/rows)); ctx.lineTo(w,j*(h/rows)); ctx.stroke(); }
+  }
+
+  // ─── UPDATE STATS / UI ───────────────────────────────────────────────────
+  function updateStats(frame) {
+    const meta      = frame.metadata  || {};
+    const stats     = frame.stats     || {};
+    const quality   = frame.quality   || {};
+    const inference = frame.inference || {};
+
+    const status = meta.connection_status || 'starting';
+    const kind   = status === 'connected' ? 'good' : status === 'degraded' ? 'warn' : '';
+    setBadge('statusBadge', status, kind);
+    setBadge('sourceBadge', meta.source_mode || 'source', meta.source_mode==='simulator'?'good':'');
+    setBadge('streamBadge', meta.stream_name || 'DSI24-EEG', '');
+    setBadge('rateBadge',   `${fmt(meta.sample_rate_hz,0)} Hz`, 'blue');
+
+    // KV panel
+    document.getElementById('streamName').textContent    = meta.stream_name || '—';
+    document.getElementById('sampleRate').textContent    = `${fmt(meta.sample_rate_hz,0)} Hz`;
+    document.getElementById('channelCountKV').textContent= (meta.channel_labels||[]).length;
+    document.getElementById('bufferSamples').textContent = stats.buffer_samples ?? '—';
+    document.getElementById('windowS').textContent       = stats.window_s != null ? `${fmt(stats.window_s,1)} s` : '—';
+    document.getElementById('frameSamples').textContent  = stats.frame_samples ?? '—';
+    document.getElementById('latestAge').textContent     = stats.latest_sample_age_ms != null ? `${fmt(stats.latest_sample_age_ms,0)} ms` : '—';
+    document.getElementById('effectiveRate').textContent = `${fmt(stats.effective_rate_hz,1)} Hz`;
+    const flatCh = (quality.flat_channel_labels||[]).length;
+    const clipCh = (quality.clip_channel_labels||[]).length;
+    document.getElementById('flatChannels').textContent  = flatCh;
+    document.getElementById('clipChannels').textContent  = clipCh;
+    document.getElementById('sourceMode').textContent    = meta.source_mode || '—';
+    document.getElementById('statusMessage').textContent = meta.message || '';
+    document.getElementById('channelCount').textContent  = `${(meta.channel_labels||[]).length} ch`;
+    document.getElementById('bufferedBadge').textContent = `${stats.buffer_samples??0} smp`;
+    document.getElementById('ageBadge').textContent      = stats.latest_sample_age_ms != null ? `${fmt(stats.latest_sample_age_ms,0)} ms` : '— ms';
+
+    // Signal quality card
+    const nCh    = (meta.channel_labels||[]).length || 19;
+    const badCh  = flatCh + clipCh;
+    const qPct   = Math.max(0, Math.round((nCh - badCh) / nCh * 100));
+    const qColor = qPct >= 90 ? 'var(--accent)' : qPct >= 70 ? 'var(--warn)' : 'var(--bad)';
+    document.getElementById('mcQuality').textContent          = `${qPct}%`;
+    document.getElementById('mcQuality').style.color          = qColor;
+    document.getElementById('mcQualityBar').style.width       = `${qPct}%`;
+    document.getElementById('mcQualityBar').style.background  = qColor;
+    document.getElementById('mcQualitySub').textContent       = `flat: ${flatCh} · clipping: ${clipCh}`;
+
+    updateInference(inference);
+  }
+
+  function updateInference(inf) {
+    const status  = inf.status || 'waiting';
+    const focus   = inf.focus_score;
+    const reward  = inf.reward_score;
+    const feats   = inf.features || {};
+    setBadge('inferenceStatus', status, status==='ok'?'good':'warn');
+
+    // Focus score metric card
+    const fPct = focus != null ? Math.max(0,Math.min(100,focus*100)) : null;
+    const fCol = focus >= 0.7 ? 'var(--accent)' : focus <= 0.36 ? 'var(--bad)' : 'var(--warn)';
+    document.getElementById('mcFocus').textContent        = focus != null ? `${Math.round(fPct)}%` : '—';
+    document.getElementById('mcFocus').style.color        = focus != null ? fCol : 'var(--muted)';
+    document.getElementById('mcFocusBar').style.width     = fPct != null ? `${fPct}%` : '0%';
+    document.getElementById('mcFocusBar').style.background= fCol;
+    document.getElementById('mcFocusMood').textContent    = label(inf.focus_mood);
+
+    // Fatigue = high theta + low engagement proxy (1 - focus, weighted by rel_theta)
+    const relTheta = feats.relative_theta;
+    const engIdx   = feats.engagement_index;
+    let fatigue    = null;
+    if (relTheta != null && engIdx != null) {
+      // Fatigue index: high theta + low engagement → fatigue
+      fatigue = Math.max(0, Math.min(1, relTheta * 2.5 + (1 - Math.min(1, engIdx)) * 0.35 - 0.2));
+    } else if (focus != null) {
+      fatigue = Math.max(0, 0.85 - focus * 0.9);
+    }
+    const fatPct = fatigue != null ? Math.round(fatigue * 100) : null;
+    const fatCol = fatigue == null ? 'var(--muted)' : fatigue >= 0.65 ? 'var(--bad)' : fatigue >= 0.4 ? 'var(--warn)' : 'var(--accent)';
+    const fatMood= fatigue == null ? '—' : fatigue >= 0.65 ? 'high fatigue' : fatigue >= 0.4 ? 'moderate' : 'alert';
+    document.getElementById('mcFatigue').textContent        = fatPct != null ? `${fatPct}%` : '—';
+    document.getElementById('mcFatigue').style.color        = fatCol;
+    document.getElementById('mcFatigueBar').style.width     = fatPct != null ? `${fatPct}%` : '0%';
+    document.getElementById('mcFatigueBar').style.background= fatCol;
+    document.getElementById('mcFatigueMood').textContent    = fatMood;
+
+    // Inference panel
+    document.getElementById('focusScore').textContent  = focus  != null ? `${Math.round(focus*100)}%`   : 'n/a';
+    document.getElementById('focusFill').style.width   = fPct   != null ? `${fPct}%`  : '0%';
+    document.getElementById('focusFill').style.background = fCol;
+    document.getElementById('focusMood').textContent   = label(inf.focus_mood);
+    document.getElementById('rewardScore').textContent = reward != null ? fmtSigned(reward,2) : 'n/a';
+    document.getElementById('rewardFill').style.width  = reward != null ? `${Math.max(0,Math.min(100,Math.abs(reward)*50))}%` : '0%';
+    document.getElementById('rewardFill').style.transform = (reward==null||reward>=0) ? 'translateX(0)' : 'translateX(-100%)';
+    document.getElementById('rewardFill').style.background = reward==null?'var(--muted)':reward>=0?'var(--accent)':'var(--bad)';
+    document.getElementById('rewardMood').textContent  = label(inf.reward_mood);
+    document.getElementById('dominantBand').textContent= label(inf.dominant_band);
+    document.getElementById('engagementIndex').textContent  = feats.engagement_index   != null ? fmt(feats.engagement_index,3) : '—';
+    document.getElementById('frontalAlpha').textContent     = feats.frontal_alpha       != null ? fmt(feats.frontal_alpha,3)    : '—';
+    document.getElementById('alphaAsymmetry').textContent   = feats.frontal_alpha_asymmetry != null ? fmtSigned(feats.frontal_alpha_asymmetry,3) : '—';
+    const rt = feats.relative_theta != null ? fmt(feats.relative_theta,2) : '—';
+    const ra = feats.relative_alpha != null ? fmt(feats.relative_alpha,2) : '—';
+    const rb = feats.relative_beta  != null ? fmt(feats.relative_beta,2)  : '—';
+    document.getElementById('relBands').textContent = `${rt} / ${ra} / ${rb}`;
+
+    const domBand = inf.dominant_band || '—';
+    setBadge('dominantBandBadge', domBand, domBand==='beta'?'good':domBand==='theta'?'warn':'');
+
+    // Push to history
+    if (focus  != null) { focusHistory.push(focus);   if (focusHistory.length  > HIST_LEN) focusHistory.shift();  }
+    if (reward != null) { rewardHistory.push(reward);  if (rewardHistory.length > HIST_LEN) rewardHistory.shift(); }
+  }
+
+  // ─── DRAW: RAW EEG SCOPE ─────────────────────────────────────────────────
+  function drawEEGScope(frame) {
+    const canvas = document.getElementById('scopeEEG');
+    const {w,h,dpr} = setCanvasSize(canvas);
+    const ctx = canvas.getContext('2d');
+
+    const labels   = frame.metadata.channel_labels || [];
+    const channels = frame.samples.channels        || [];
+    const t        = frame.samples.t_rel           || [];
+    const n        = labels.length || 19;
+    pushRawEEG(channels, t);
+
+    ctx.clearRect(0,0,w,h);
+    ctx.fillStyle = '#080a0b';
+    ctx.fillRect(0,0,w,h);
+
+    const L = Math.round(46 * dpr), R = Math.round(8 * dpr);
+    const T = Math.round(6  * dpr), B = Math.round(6 * dpr);
+    const pW = w - L - R, pH = h - T - B;
+    const rowH = pH / n;
+
+    // Grid rows
+    ctx.strokeStyle = 'rgba(37,46,54,.7)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < n; i++) {
+      const y = T + rowH * (i + 0.5);
+      ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(w-R, y); ctx.stroke();
+    }
+
+    // Channel labels
+    ctx.font = `${Math.round(10.5*dpr)}px ui-sans-serif, system-ui, sans-serif`;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'right';
+
+    if (!t.length || !channels.length) {
+      ctx.fillStyle = '#9aa7b1';
+      ctx.fillText('Waiting for samples…', L+40*dpr, T+24*dpr);
+      return;
+    }
+
+    const minT = t[0], maxT = t[t.length-1] || 0, spanT = Math.max(.001, maxT-minT);
+
+    for (let ch = 0; ch < Math.min(n, channels.length); ch++) {
+      const vals  = channels[ch] || [];
+      const stats = channelStats(vals);
+      const centerY = T + rowH*(ch+0.5);
+      const amp     = rowH * 0.42;
+
+      // Quality coloring
+      const flatCh = lastFrame?.quality?.flat_channel_labels || [];
+      const clipCh = lastFrame?.quality?.clip_channel_labels || [];
+      const lbl    = labels[ch] || `ch${ch+1}`;
+      const isFlat = flatCh.includes(lbl);
+      const isClip = clipCh.includes(lbl);
+      ctx.fillStyle = isFlat ? 'var(--warn)' : isClip ? 'var(--bad)' : '#7a8d9b';
+      ctx.fillText(lbl, L - 4*dpr, centerY);
+
+      if (vals.length < 2) continue;
+      ctx.strokeStyle = isFlat ? 'rgba(245,200,66,.55)' : isClip ? 'rgba(255,95,95,.7)' : '#35d6aa';
+      ctx.lineWidth   = 1.2 * dpr;
+      ctx.beginPath();
+      for (let i = 0; i < vals.length; i++) {
+        const x = L + ((t[i]-minT)/spanT)*pW;
+        const y = centerY - ((vals[i]-stats.mean)/stats.scale)*amp;
+        i === 0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+    }
+  }
+
+  // ─── DRAW: SCORES CHART ──────────────────────────────────────────────────
+  function drawScoresChart() {
+    const canvas = document.getElementById('scoresChart');
+    const {w,h,dpr} = setCanvasSize(canvas);
+    const ctx = canvas.getContext('2d');
+    drawGrid(ctx,w,h,dpr,10,4);
+
+    const L=4, R=4, T=14*dpr, B=16*dpr;
+    const pW=w-L-R, pH=h-T-B;
+
+    // Axis labels
+    ctx.font = `${10*dpr}px ui-sans-serif,system-ui,sans-serif`;
+    ctx.textBaseline='middle'; ctx.textAlign='right';
+    ctx.fillStyle='var(--muted)';
+    ctx.fillText('1.0', L+28*dpr, T);
+    ctx.fillText('0',   L+28*dpr, T+pH*0.5);
+    ctx.fillText('-1',  L+28*dpr, T+pH);
+
+    function drawLine(history, color, scale) {
+      if (history.length < 2) return;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5 * dpr;
+      ctx.beginPath();
+      for (let i = 0; i < history.length; i++) {
+        const x = L + (i / (HIST_LEN-1)) * pW;
+        const y = T + pH * (0.5 - history[i] * scale * 0.5);
+        i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+    }
+
+    drawLine(rewardHistory, '#6eaaff', 1);   // reward: -1..1
+    drawLine(focusHistory,  '#35d6aa', 1);   // focus: 0..1, treat as -0..1 centered at 0
+
+    // Legend
+    ctx.textAlign='left'; ctx.textBaseline='top';
+    ctx.fillStyle='#35d6aa'; ctx.fillText('▬ Focus',  L+4, 2);
+    ctx.fillStyle='#6eaaff'; ctx.fillText('▬ Reward', L+60*dpr, 2);
+  }
+
+  // ─── DRAW: EEG BANDS CHART ───────────────────────────────────────────────
+  function drawBandsChart(frame) {
+    const canvas = document.getElementById('bandsChart');
+    const {w,h,dpr} = setCanvasSize(canvas);
+    const ctx = canvas.getContext('2d');
+    drawGrid(ctx,w,h,dpr,6,4);
+
+    const feats = frame?.inference?.features || {};
+    const bands = [
+      { label:'δ delta', value: null,                 color:'#8a97a3' },
+      { label:'θ theta', value: feats.relative_theta, color:'#6eaaff' },
+      { label:'α alpha', value: feats.relative_alpha, color:'#35d6aa' },
+      { label:'β beta',  value: feats.relative_beta,  color:'#b48cff' },
+    ];
+
+    const nbands = bands.length;
+    const barW   = Math.floor((w * 0.7) / nbands);
+    const gap    = Math.floor((w * 0.3) / (nbands + 1));
+    const maxH   = h - 28*dpr;
+    const baseY  = h - 14*dpr;
+
+    ctx.font = `${11*dpr}px ui-sans-serif,system-ui,sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+
+    for (let i = 0; i < nbands; i++) {
+      const x    = gap + i*(barW+gap);
+      const bval = bands[i].value;
+      const norm = bval != null ? Math.max(0, Math.min(1, bval * 3.5)) : 0;
+      const bh   = Math.round(norm * maxH);
+
+      ctx.fillStyle = bands[i].color + '30';
+      ctx.fillRect(x, 4, barW, maxH);
+      ctx.fillStyle = bands[i].color;
+      ctx.fillRect(x, baseY - bh, barW, bh);
+
+      ctx.fillStyle = '#f0f4f7';
+      ctx.fillText(bands[i].label, x + barW/2, baseY + 7*dpr);
+      if (bval != null) {
+        ctx.fillStyle = bands[i].color;
+        ctx.fillText(fmt(bval,2), x + barW/2, Math.max(8*dpr, baseY - bh - 8*dpr));
+      }
+    }
+  }
+
+  // ─── DRAW: POSTURE EMG CHART (envelope) ──────────────────────────────────
+  const emgChLabels = ['U.Trap L','U.Trap R','L.Trap L','L.Trap R'];
+  const emgChColors = ['#f5c842','#ff9a45','#6eaaff','#b48cff'];
+  const emgChHistory = [[],[],[],[]];
+
+  function pushEMGHistory(samples) {
+    for (let ch = 0; ch < 4; ch++) {
+      const env = Math.sqrt(samples.map(s=>s[ch]**2).reduce((a,b)=>a+b,0)/samples.length);
+      emgChHistory[ch].push(env);
+      if (emgChHistory[ch].length > EMG_HIST_LEN) emgChHistory[ch].shift();
+    }
+  }
+
+  function drawEMGChart() {
+    const canvas = document.getElementById('emgChart');
+    const {w,h,dpr} = setCanvasSize(canvas);
+    const ctx = canvas.getContext('2d');
+    drawGrid(ctx,w,h,dpr,10,3);
+
+    const L=4, T=4, R=4, B=14*dpr;
+    const pW=w-L-R, pH=h-T-B;
+
+    for (let ch = 0; ch < 4; ch++) {
+      const hist = emgChHistory[ch];
+      if (hist.length < 2) continue;
+      const maxV = Math.max(...hist, 0.01);
+      ctx.strokeStyle = emgChColors[ch];
+      ctx.lineWidth = 1.2*dpr;
+      ctx.beginPath();
+      for (let i=0;i<hist.length;i++) {
+        const x = L + (i/(EMG_HIST_LEN-1))*pW;
+        const y = T + pH*(1 - hist[i]/maxV);
+        i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+    }
+
+    // Legend
+    ctx.font = `${10*dpr}px ui-sans-serif,system-ui,sans-serif`;
+    ctx.textAlign='left'; ctx.textBaseline='bottom';
+    for (let ch=0;ch<4;ch++) {
+      ctx.fillStyle=emgChColors[ch];
+      ctx.fillText(emgChLabels[ch], 8+(ch*60)*dpr, h-2);
+    }
+  }
+
+  // ─── DRAW: ECG CONTEXT CHART (HR trend) ──────────────────────────────────
+  function drawECGCtxChart() {
+    const canvas = document.getElementById('ecgCtxChart');
+    const {w,h,dpr} = setCanvasSize(canvas);
+    const ctx = canvas.getContext('2d');
+    drawGrid(ctx,w,h,dpr,10,4);
+
+    const L=4, T=4, R=4, B=14*dpr;
+    const pW=w-L-R, pH=h-T-B;
+    const HR_MIN=50, HR_MAX=90;
+
+    if (ecgHRHistory.length >= 2) {
+      ctx.strokeStyle = '#ff6b9d';
+      ctx.lineWidth = 1.5*dpr;
+      ctx.beginPath();
+      for (let i=0;i<ecgHRHistory.length;i++) {
+        const x = L + (i/(ECG_HIST_LEN-1))*pW;
+        const y = T + pH*(1-(ecgHRHistory[i]-HR_MIN)/(HR_MAX-HR_MIN));
+        i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+    }
+
+    ctx.font=`${10*dpr}px ui-sans-serif,system-ui,sans-serif`;
+    ctx.textAlign='left'; ctx.textBaseline='bottom';
+    ctx.fillStyle='#ff6b9d';
+    ctx.fillText('Heart rate (BPM)', 8, h-2);
+    ctx.textAlign='right';
+    ctx.fillStyle=HR_MAX+'';
+    ctx.fillStyle='#8a97a3';
+    ctx.fillText(HR_MAX+' BPM', w-R-4, T+10*dpr);
+    ctx.fillText(HR_MIN+' BPM', w-R-4, h-B-2);
+  }
+
+  // ─── DRAW: RAW EMG SCOPE ─────────────────────────────────────────────────
+  function drawEMGScope(emgSamples) {
+    const canvas = document.getElementById('scopeEMG');
+    const {w,h,dpr} = setCanvasSize(canvas);
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = '#080a0b';
+    ctx.fillRect(0,0,w,h);
+    ctx.strokeStyle = 'rgba(37,46,54,.6)';
+    ctx.lineWidth = 1;
+    for (let j=1;j<4;j++) { ctx.beginPath(); ctx.moveTo(0,j*(h/4)); ctx.lineTo(w,j*(h/4)); ctx.stroke(); }
+
+    const n=4;
+    const rowH=h/n;
+    const L=Math.round(58*dpr), R=6;
+    const pW=w-L-R;
+
+    ctx.font=`${10*dpr}px ui-sans-serif,system-ui,sans-serif`;
+    ctx.textAlign='right'; ctx.textBaseline='middle';
+
+    // Keep a rolling buffer of EMG samples
+    if (!drawEMGScope._buf) drawEMGScope._buf=[[],[],[],[]];
+    const buf = drawEMGScope._buf;
+    for (const s of emgSamples) {
+      for (let ch=0;ch<4;ch++) {
+        buf[ch].push(s[ch]);
+        if (buf[ch].length > EMG_RAW_LEN) buf[ch].shift();
+      }
+    }
+
+    for (let ch=0;ch<4;ch++) {
+      const centerY = rowH*(ch+0.5);
+      ctx.strokeStyle='rgba(37,46,54,.7)';
+      ctx.beginPath(); ctx.moveTo(L,centerY); ctx.lineTo(w-R,centerY); ctx.stroke();
+      ctx.fillStyle=emgChColors[ch];
+      ctx.fillText(EMG_LABELS[ch], L-6, centerY);
+      const vals=buf[ch];
+      if (vals.length<2) continue;
+      const mx=Math.max(...vals.map(Math.abs),0.01);
+      ctx.strokeStyle=emgChColors[ch];
+      ctx.lineWidth=0.9*dpr;
+      ctx.beginPath();
+      for (let i=0;i<vals.length;i++) {
+        const x=L+(i/(EMG_RAW_LEN-1))*pW;
+        const y=centerY-(vals[i]/mx)*(rowH*0.44);
+        i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+    }
+  }
+
+  // ─── DRAW: RAW ECG SCOPE ─────────────────────────────────────────────────
+  function drawECGScope(ecgSamples) {
+    const canvas = document.getElementById('scopeECG');
+    const {w,h,dpr} = setCanvasSize(canvas);
+    const ctx = canvas.getContext('2d');
+    drawGrid(ctx,w,h,dpr,10,3,'rgba(37,46,54,.5)');
+
+    if (!drawECGScope._buf) drawECGScope._buf=[];
+    const buf=drawECGScope._buf;
+    for (const v of ecgSamples) {
+      buf.push(v);
+      if (buf.length>ECG_RAW_LEN) buf.shift();
+    }
+
+    const L=6, R=6, T=6, B=6;
+    const pW=w-L-R, pH=h-T-B;
+    const mx=Math.max(...buf.map(Math.abs),0.5);
+
+    if (buf.length<2) return;
+    ctx.strokeStyle='#ff6b9d';
+    ctx.lineWidth=1.4*dpr;
+    ctx.beginPath();
+    for (let i=0;i<buf.length;i++) {
+      const x=L+(i/(ECG_RAW_LEN-1))*pW;
+      const y=T+pH*(0.5-buf[i]/(mx*2.2));
+      i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  }
+
+  // ─── DRAW: TOPOMAP ───────────────────────────────────────────────────────
+  function drawTopomap(frame) {
+    const canvas = document.getElementById('topomap');
+    const dpr    = window.devicePixelRatio||1;
+    const rect   = canvas.getBoundingClientRect();
+    const size   = Math.max(200, Math.floor(Math.min(rect.width,rect.height||rect.width)*dpr));
+    if (canvas.width!==size||canvas.height!==size) { canvas.width=size; canvas.height=size; }
+
+    const labels   = frame.metadata.channel_labels||[];
+    const channels = frame.samples.channels||[];
+    const vals     = labels.map((_,idx) => {
+      const s = channels[idx]||[];
+      return recentRMS(s);
+    });
+    const finite   = vals.filter(Number.isFinite);
+    const scale    = robustScale(finite);
+    const norm     = vals.map(v => Number.isFinite(v)?Math.max(-1,Math.min(1,v/scale)):0);
+    if (!topoSmoothed||topoSmoothed.length!==norm.length) topoSmoothed=norm.slice();
+    else topoSmoothed = topoSmoothed.map((old,i)=>old*0.82+norm[i]*0.18);
+
+    const ctx=canvas.getContext('2d');
+    ctx.clearRect(0,0,size,size);
+    ctx.fillStyle='#080a0b'; ctx.fillRect(0,0,size,size);
+
+    const cx=size/2, cy=size/2, r=size*0.41;
+    const img=ctx.createImageData(size,size);
+    for (let y=0;y<size;y++) for (let x=0;x<size;x++) {
+      const nx=(x-cx)/r, ny=(y-cy)/r;
+      const off=(y*size+x)*4;
+      if (Math.hypot(nx,ny)>1) {
+        img.data[off]=8; img.data[off+1]=10; img.data[off+2]=11; img.data[off+3]=255; continue;
+      }
+      const c=topoColor(interpolateAt(nx,ny,labels,topoSmoothed));
+      img.data[off]=c[0]; img.data[off+1]=c[1]; img.data[off+2]=c[2]; img.data[off+3]=255;
+    }
+    ctx.putImageData(img,0,0);
+
+    ctx.save();
+    ctx.strokeStyle='#d8e3ea'; ctx.lineWidth=2*dpr;
+    ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx-0.08*r,cy-r); ctx.lineTo(cx,cy-1.13*r); ctx.lineTo(cx+0.08*r,cy-r);
+    ctx.stroke();
+    ctx.strokeStyle='rgba(216,227,234,.8)';
+    ctx.beginPath(); ctx.arc(cx-r*1.03,cy,r*.11,-Math.PI/2,Math.PI/2); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx+r*1.03,cy,r*.11,Math.PI/2,-Math.PI/2); ctx.stroke();
+
+    ctx.font=`${10*dpr}px ui-sans-serif,system-ui,sans-serif`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    labels.forEach((lbl,idx) => {
+      const pos=topoPositions[lbl]; if (!pos) return;
+      const px=cx+pos[0]*r, py=cy+pos[1]*r;
+      ctx.fillStyle='#0a0c0e'; ctx.beginPath(); ctx.arc(px,py,4.5*dpr,0,Math.PI*2); ctx.fill();
+      ctx.strokeStyle='#e0eaf2'; ctx.lineWidth=1*dpr; ctx.stroke();
+      ctx.fillStyle='#e0eaf2'; ctx.fillText(lbl,px,py-11*dpr);
+    });
+    ctx.restore();
+    document.getElementById('topoScale').textContent=`scale ${fmt(scale,1)}`;
+  }
+
+  // ─── ANIMATION LOOP ──────────────────────────────────────────────────────
+  function animLoop(ts) {
+    requestAnimationFrame(animLoop);
+    const dt = lastAnimT == null ? 0.016 : Math.min((ts - lastAnimT) / 1000, 0.1);
+    lastAnimT = ts;
+    simTime += dt;
+
+    // Generate synthetic EMG + ECG samples for this frame
+    // Approximate strain from focus score (higher focus = less EMG strain in trapezius? or use fatigue proxy)
+    const focus       = lastFrame?.inference?.focus_score ?? 0.4;
+    const strainLevel = Math.max(0, Math.min(1, 0.6 - focus * 0.4 + 0.2 * Math.sin(simTime * 0.07)));
+    const emgPerFrame = 20;  // synthetic EMG samples per anim frame
+    const ecgPerFrame = 15;
+    const emgBatch    = [];
+    for (let i = 0; i < emgPerFrame; i++) {
+      emgBatch.push(emgSample(simTime + i * 0.001, strainLevel));
+    }
+    pushEMGHistory(emgBatch);
+
+    const ecgBatch = [];
+    for (let i = 0; i < ecgPerFrame; i++) {
+      ecgBatch.push(ecgAt(simTime + i * (1/300)));
+    }
+
+    // Update EMG strain metric card
+    const rms = Math.sqrt(emgBatch.flat().reduce((s,v)=>s+v*v,0)/emgBatch.flat().length);
+    const emgPct = Math.round(Math.min(100, strainLevel * 100));
+    const emgCol = strainLevel >= 0.65 ? 'var(--bad)' : strainLevel >= 0.4 ? 'var(--warn)' : 'var(--accent)';
+    const emgMood= strainLevel >= 0.65 ? 'high strain' : strainLevel >= 0.4 ? 'moderate' : 'relaxed';
+    document.getElementById('mcEMG').textContent        = `${emgPct}%`;
+    document.getElementById('mcEMG').style.color        = emgCol;
+    document.getElementById('mcEMGBar').style.width     = `${emgPct}%`;
+    document.getElementById('mcEMGBar').style.background= emgCol;
+    document.getElementById('mcEMGMood').textContent    = emgMood;
+
+    // Update HR badge + ECG history
+    const hr = Math.round(currentHR(simTime));
+    setBadge('hrBadge', `♥ ${hr} BPM`, hr > 75 ? 'warn' : 'good');
+    setBadge('ecgRateBadge', `${hr} BPM`, hr > 75 ? 'warn' : 'good');
+    ecgHRHistory.push(hr);
+    if (ecgHRHistory.length > ECG_HIST_LEN) ecgHRHistory.shift();
+
+    // Draw all charts
+    if (lastFrame) {
+      drawEEGScope(lastFrame);
+      drawTopomap(lastFrame);
+      drawBandsChart(lastFrame);
+    }
+    drawScoresChart();
+    drawEMGChart();
+    drawECGCtxChart();
+    drawEMGScope(emgBatch);
+    drawECGScope(ecgBatch);
+  }
+
+  // ─── WEBSOCKET ───────────────────────────────────────────────────────────
+  function connect() {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws = new WebSocket(`${proto}://${location.host}/stream/eeg`);
+    ws.onmessage = e => {
+      lastFrame = JSON.parse(e.data);
+      updateStats(lastFrame);
     };
-
-    function connect() {
-      const protocol = location.protocol === "https:" ? "wss" : "ws";
-      const ws = new WebSocket(`${protocol}://${location.host}/stream/eeg`);
-      ws.onmessage = event => {
-        lastFrame = JSON.parse(event.data);
-        updateStats(lastFrame);
-        draw(lastFrame);
-        drawTopomap(lastFrame);
-      };
-      ws.onclose = () => {
-        setBadge("statusBadge", "disconnected", "bad");
-        if (!reconnectTimer) {
-          reconnectTimer = setTimeout(() => {
-            reconnectTimer = null;
-            connect();
-          }, 1000);
-        }
-      };
-      ws.onerror = () => ws.close();
-    }
-
-    function setBadge(id, text, kind) {
-      const el = document.getElementById(id);
-      el.textContent = text;
-      el.className = `badge ${kind || ""}`.trim();
-    }
-
-    function updateStats(frame) {
-      const meta = frame.metadata || {};
-      const stats = frame.stats || {};
-      const quality = frame.quality || {};
-      const inference = frame.inference || {};
-      const status = meta.connection_status || "starting";
-      const kind = status === "connected" ? "good" : status === "degraded" ? "warn" : "";
-      setBadge("statusBadge", status, kind);
-      setBadge("sourceBadge", meta.source_mode || "source", meta.source_mode === "simulator" ? "good" : "");
-      setBadge("streamBadge", meta.stream_name || "DSI24-EEG", "");
-      document.getElementById("streamName").textContent = meta.stream_name || "DSI24-EEG";
-      document.getElementById("sampleRate").textContent = `${formatNumber(meta.sample_rate_hz || 0, 0)} Hz`;
-      document.getElementById("channelCount").textContent = `${(meta.channel_labels || []).length} channels`;
-      document.getElementById("rate").textContent = `${formatNumber(stats.effective_rate_hz || 0, 1)} Hz`;
-      document.getElementById("buffered").textContent = String(stats.buffer_samples || 0);
-      document.getElementById("age").textContent = stats.latest_sample_age_ms == null ? "n/a" : `${formatNumber(stats.latest_sample_age_ms, 0)} ms`;
-      document.getElementById("flatChannels").textContent = String((quality.flat_channel_labels || []).length);
-      document.getElementById("clipChannels").textContent = String((quality.clip_channel_labels || []).length);
-      document.getElementById("message").textContent = meta.message || "";
-      updateInference(inference);
-    }
-
-    function updateInference(inference) {
-      const status = inference.status || "waiting";
-      const focus = inference.focus_score;
-      const reward = inference.reward_score;
-      const features = inference.features || {};
-      setBadge("inferenceStatus", status, status === "ok" ? "good" : "warn");
-
-      document.getElementById("focusScore").textContent = focus == null ? "n/a" : `${Math.round(focus * 100)}%`;
-      document.getElementById("focusFill").style.width = `${Math.max(0, Math.min(100, (focus || 0) * 100))}%`;
-      document.getElementById("focusFill").style.background = focus >= 0.7 ? "var(--accent)" : focus <= 0.36 ? "var(--bad)" : "var(--warn)";
-      document.getElementById("focusMood").textContent = labelize(inference.focus_mood || "unknown");
-
-      document.getElementById("rewardScore").textContent = reward == null ? "n/a" : formatSigned(reward, 2);
-      document.getElementById("rewardFill").style.width = `${Math.max(0, Math.min(100, Math.abs(reward || 0) * 50))}%`;
-      document.getElementById("rewardFill").style.transform = reward == null || reward >= 0 ? "translateX(0)" : "translateX(-100%)";
-      document.getElementById("rewardFill").style.background = reward == null ? "var(--muted)" : reward >= 0 ? "var(--accent)" : "var(--bad)";
-      document.getElementById("rewardMood").textContent = labelize(inference.reward_mood || "unknown");
-
-      document.getElementById("dominantBand").textContent = labelize(inference.dominant_band || "unknown");
-      document.getElementById("engagementIndex").textContent = features.engagement_index == null ? "n/a" : formatNumber(features.engagement_index, 2);
-      document.getElementById("alphaAsymmetry").textContent = features.frontal_alpha_asymmetry == null ? "n/a" : formatSigned(features.frontal_alpha_asymmetry, 2);
-    }
-
-    function draw(frame) {
-      const rect = canvas.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-      const width = Math.max(300, Math.floor(rect.width * dpr));
-      const height = Math.max(400, Math.floor(rect.height * dpr));
-      if (canvas.width !== width || canvas.height !== height) {
-        canvas.width = width;
-        canvas.height = height;
+    ws.onclose = () => {
+      setBadge('statusBadge','disconnected','bad');
+      if (!reconnectTimer) {
+        reconnectTimer = setTimeout(() => { reconnectTimer=null; connect(); }, 1500);
       }
+    };
+    ws.onerror = () => ws.close();
+  }
 
-      ctx.clearRect(0, 0, width, height);
-      ctx.fillStyle = "#0d0f11";
-      ctx.fillRect(0, 0, width, height);
-
-      const labels = frame.metadata.channel_labels || [];
-      const channels = frame.samples.channels || [];
-      const t = frame.samples.t_rel || [];
-      const n = labels.length || 19;
-      const left = 54 * dpr;
-      const right = 12 * dpr;
-      const top = 12 * dpr;
-      const bottom = 20 * dpr;
-      const plotW = width - left - right;
-      const plotH = height - top - bottom;
-      const rowH = plotH / n;
-
-      ctx.strokeStyle = "rgba(120, 135, 150, 0.18)";
-      ctx.lineWidth = 1 * dpr;
-      ctx.fillStyle = "#9aa7b1";
-      ctx.font = `${11 * dpr}px ui-sans-serif, system-ui, sans-serif`;
-      for (let i = 0; i < n; i += 1) {
-        const y = top + rowH * (i + 0.5);
-        ctx.beginPath();
-        ctx.moveTo(left, y);
-        ctx.lineTo(width - right, y);
-        ctx.stroke();
-        ctx.fillText(labels[i] || `ch${i + 1}`, 8 * dpr, y + 4 * dpr);
-      }
-
-      if (!t.length || !channels.length) {
-        ctx.fillStyle = "#9aa7b1";
-        ctx.fillText("Waiting for samples", left, top + 24 * dpr);
-        return;
-      }
-
-      const minT = t[0];
-      const maxT = t[t.length - 1] || 0;
-      const spanT = Math.max(0.001, maxT - minT);
-      ctx.strokeStyle = "#41d6b1";
-      ctx.lineWidth = 1.3 * dpr;
-      for (let ch = 0; ch < Math.min(n, channels.length); ch += 1) {
-        const values = channels[ch] || [];
-        if (values.length < 2) continue;
-        const stats = channelStats(values);
-        const centerY = top + rowH * (ch + 0.5);
-        const amp = rowH * 0.34;
-        ctx.beginPath();
-        for (let i = 0; i < values.length; i += 1) {
-          const x = left + ((t[i] - minT) / spanT) * plotW;
-          const y = centerY - ((values[i] - stats.mean) / stats.scale) * amp;
-          if (i === 0) ctx.moveTo(x, y);
-          else ctx.lineTo(x, y);
-        }
-        ctx.stroke();
-      }
-    }
-
-    function drawTopomap(frame) {
-      const rect = topoCanvas.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-      const size = Math.max(260, Math.floor(Math.min(rect.width, rect.height || rect.width) * dpr));
-      if (topoCanvas.width !== size || topoCanvas.height !== size) {
-        topoCanvas.width = size;
-        topoCanvas.height = size;
-      }
-
-      const labels = frame.metadata.channel_labels || [];
-      const channels = frame.samples.channels || [];
-      const values = labels.map((label, index) => {
-        const series = channels[index] || [];
-        return recentActivity(series);
-      });
-      const finite = values.filter(Number.isFinite);
-      const scale = robustScale(finite);
-      const normalized = values.map(value => Number.isFinite(value) ? Math.max(-1, Math.min(1, value / scale)) : 0);
-      if (!topoSmoothed || topoSmoothed.length !== normalized.length) {
-        topoSmoothed = normalized.slice();
-      } else {
-        topoSmoothed = topoSmoothed.map((oldValue, i) => oldValue * 0.82 + normalized[i] * 0.18);
-      }
-
-      const ctx = topoCtx;
-      ctx.clearRect(0, 0, size, size);
-      ctx.fillStyle = "#0d0f11";
-      ctx.fillRect(0, 0, size, size);
-
-      const centerX = size / 2;
-      const centerY = size / 2;
-      const radius = size * 0.41;
-      const image = ctx.createImageData(size, size);
-      for (let y = 0; y < size; y += 1) {
-        for (let x = 0; x < size; x += 1) {
-          const nx = (x - centerX) / radius;
-          const ny = (y - centerY) / radius;
-          const r = Math.hypot(nx, ny);
-          const offset = (y * size + x) * 4;
-          if (r > 1) {
-            image.data[offset] = 13;
-            image.data[offset + 1] = 15;
-            image.data[offset + 2] = 17;
-            image.data[offset + 3] = 255;
-            continue;
-          }
-          const interpolated = interpolateAt(nx, ny, labels, topoSmoothed);
-          const color = topoColor(interpolated);
-          image.data[offset] = color[0];
-          image.data[offset + 1] = color[1];
-          image.data[offset + 2] = color[2];
-          image.data[offset + 3] = 255;
-        }
-      }
-      ctx.putImageData(image, 0, 0);
-
-      ctx.save();
-      ctx.strokeStyle = "#d8e3ea";
-      ctx.lineWidth = 2 * dpr;
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-      ctx.stroke();
-
-      ctx.beginPath();
-      ctx.moveTo(centerX - 0.08 * radius, centerY - radius);
-      ctx.lineTo(centerX, centerY - 1.13 * radius);
-      ctx.lineTo(centerX + 0.08 * radius, centerY - radius);
-      ctx.stroke();
-
-      ctx.strokeStyle = "rgba(216, 227, 234, 0.8)";
-      ctx.beginPath();
-      ctx.arc(centerX - radius * 1.03, centerY, radius * 0.11, -Math.PI / 2, Math.PI / 2);
-      ctx.arc(centerX + radius * 1.03, centerY, radius * 0.11, Math.PI / 2, -Math.PI / 2);
-      ctx.stroke();
-
-      ctx.font = `${10 * dpr}px ui-sans-serif, system-ui, sans-serif`;
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      labels.forEach((label, index) => {
-        const pos = topoPositions[label];
-        if (!pos) return;
-        const x = centerX + pos[0] * radius;
-        const y = centerY + pos[1] * radius;
-        ctx.fillStyle = "#101214";
-        ctx.beginPath();
-        ctx.arc(x, y, 4.5 * dpr, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.strokeStyle = "#f2f5f7";
-        ctx.lineWidth = 1 * dpr;
-        ctx.stroke();
-        ctx.fillStyle = "#f2f5f7";
-        ctx.fillText(label, x, y - 12 * dpr);
-      });
-      ctx.restore();
-
-      document.getElementById("topoScale").textContent = `scale ${formatNumber(scale, 1)}`;
-    }
-
-    function interpolateAt(x, y, labels, values) {
-      let weighted = 0;
-      let total = 0;
-      for (let i = 0; i < labels.length; i += 1) {
-        const pos = topoPositions[labels[i]];
-        if (!pos) continue;
-        const dist2 = Math.max((x - pos[0]) ** 2 + (y - pos[1]) ** 2, 0.0025);
-        const weight = 1 / (dist2 ** 1.4);
-        weighted += values[i] * weight;
-        total += weight;
-      }
-      return total ? Math.max(-1, Math.min(1, weighted / total)) : 0;
-    }
-
-    function recentActivity(series) {
-      if (!series.length) return 0;
-      const tail = series.slice(Math.max(0, series.length - 180)).filter(Number.isFinite);
-      if (!tail.length) return 0;
-      const mean = tail.reduce((acc, value) => acc + value, 0) / tail.length;
-      const variance = tail.reduce((acc, value) => acc + (value - mean) ** 2, 0) / tail.length;
-      return Math.sqrt(variance);
-    }
-
-    function robustScale(values) {
-      if (!values.length) return 1;
-      const sorted = values.map(Math.abs).sort((a, b) => a - b);
-      const p90 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.9))];
-      return Math.max(p90, 1e-6);
-    }
-
-    function topoColor(value) {
-      const v = Math.max(-1, Math.min(1, value));
-      const stops = [
-        [-1.0, [58, 103, 191]],
-        [-0.35, [65, 214, 177]],
-        [0.0, [21, 25, 28]],
-        [0.35, [246, 200, 95]],
-        [1.0, [255, 107, 107]]
-      ];
-      for (let i = 0; i < stops.length - 1; i += 1) {
-        const [aValue, aColor] = stops[i];
-        const [bValue, bColor] = stops[i + 1];
-        if (v >= aValue && v <= bValue) {
-          const t = (v - aValue) / (bValue - aValue);
-          return aColor.map((c, index) => Math.round(c + (bColor[index] - c) * t));
-        }
-      }
-      return stops[stops.length - 1][1];
-    }
-
-    function channelStats(values) {
-      let sum = 0;
-      let count = 0;
-      for (const value of values) {
-        if (Number.isFinite(value)) {
-          sum += value;
-          count += 1;
-        }
-      }
-      const mean = count ? sum / count : 0;
-      const deviations = values
-        .filter(Number.isFinite)
-        .map(value => Math.abs(value - mean))
-        .sort((a, b) => a - b);
-      const p95 = deviations.length ? deviations[Math.floor(deviations.length * 0.95)] : 1;
-      return { mean, scale: Math.max(p95 * 3, 1e-9) };
-    }
-
-    function formatNumber(value, digits) {
-      return Number.isFinite(Number(value)) ? Number(value).toFixed(digits) : "0";
-    }
-
-    function formatSigned(value, digits) {
-      if (!Number.isFinite(Number(value))) return "0";
-      const fixed = Number(value).toFixed(digits);
-      return Number(value) > 0 ? `+${fixed}` : fixed;
-    }
-
-    function labelize(value) {
-      return String(value || "unknown").replaceAll("_", " ");
-    }
-
-    document.querySelectorAll("button[data-state]").forEach(button => {
-      button.addEventListener("click", async () => {
-        const state = button.dataset.state;
-        const msg = document.getElementById("injectMessage");
-        try {
-          const res = await fetch("/sim/inject", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ state, duration_s: 5 })
-          });
-          const body = await res.json();
-          if (!res.ok) throw new Error(body.detail || "Injection failed");
-          msg.textContent = `${body.state} injected`;
-        } catch (err) {
-          msg.textContent = err.message;
-        }
-      });
+  // ─── SIM INJECTION ───────────────────────────────────────────────────────
+  document.querySelectorAll('button[data-state]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const state = btn.dataset.state;
+      const msg   = document.getElementById('injectMessage');
+      try {
+        const res  = await fetch('/sim/inject',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({state,duration_s:5})});
+        const body = await res.json();
+        if (!res.ok) throw new Error(body.detail||'Failed');
+        msg.textContent = `✓ ${body.state} injected (5 s)`;
+        setTimeout(()=>msg.textContent='',5000);
+      } catch(err) { msg.textContent=err.message; }
     });
+  });
 
-    window.addEventListener("resize", () => {
-      if (lastFrame) {
-        draw(lastFrame);
-        drawTopomap(lastFrame);
-      }
-    });
+  // ─── RESIZE ──────────────────────────────────────────────────────────────
+  window.addEventListener('resize', () => {
+    if (lastFrame) { drawEEGScope(lastFrame); drawTopomap(lastFrame); }
+  });
 
-    connect();
-  </script>
+  // ─── BOOT ────────────────────────────────────────────────────────────────
+  connect();
+  requestAnimationFrame(animLoop);
+</script>
 </body>
 </html>
