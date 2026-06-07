@@ -95,6 +95,7 @@
       supabase_round_trip_ms: supabaseRoundTripMs,
       reward_label: body && body.reward_label,
       embedding_status: body && body.embedding_status,
+      embedding_async: body && body.embedding_async,
     });
 
     return Object.assign({ ok: true, supabase_round_trip_ms: supabaseRoundTripMs }, body);

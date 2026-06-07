@@ -68,12 +68,6 @@ Deno.serve(async (request) => {
       auth: { persistSession: false },
     });
 
-    const embeddingResult = await createEmbedding({
-      apiKey: openaiApiKey,
-      model: embeddingModel,
-      input: embeddingInput(normalized),
-    });
-
     const postRow: Record<string, unknown> = {
       platform: normalized.platform,
       platform_post_id: normalized.platform_post_id,
@@ -84,21 +78,24 @@ Deno.serve(async (request) => {
       media: normalized.media,
       raw_capture: normalized.raw_capture,
       embedding_model: embeddingModel,
-      embedding_status: embeddingResult.ok ? "complete" : "failed",
-      embedding_error: embeddingResult.ok ? null : embeddingResult.error,
     };
-
-    if (embeddingResult.ok) {
-      postRow.embedding = embeddingResult.embedding;
-    }
 
     const { data: post, error: postError } = await supabase
       .from("posts")
       .upsert(postRow, { onConflict: "platform,platform_post_id" })
-      .select("id")
+      .select("id,embedding_status")
       .single();
 
     if (postError) throw postError;
+
+    const embeddingState = scheduleEmbeddingUpdate({
+      supabase,
+      postId: post.id,
+      currentStatus: post.embedding_status,
+      apiKey: openaiApiKey,
+      model: embeddingModel,
+      input: embeddingInput(normalized),
+    });
 
     const rewardScore = randomRewardScore();
     const rewardLabel = labelReward(rewardScore);
@@ -124,9 +121,10 @@ Deno.serve(async (request) => {
         reward_score: existingObservation.reward_score,
         reward_label: existingObservation.reward_label,
         reward_source: "random_v0",
-        embedding_status: embeddingResult.ok ? "complete" : "failed",
+        embedding_status: embeddingState.status,
+        embedding_async: embeddingState.async,
         embedding_model: embeddingModel,
-        embedding_error: embeddingResult.ok ? null : embeddingResult.error,
+        embedding_error: embeddingState.error,
       });
     }
 
@@ -167,9 +165,10 @@ Deno.serve(async (request) => {
       reward_score: rewardScore,
       reward_label: rewardLabel,
       reward_source: "random_v0",
-      embedding_status: embeddingResult.ok ? "complete" : "failed",
+      embedding_status: embeddingState.status,
+      embedding_async: embeddingState.async,
       embedding_model: embeddingModel,
-      embedding_error: embeddingResult.ok ? null : embeddingResult.error,
+      embedding_error: embeddingState.error,
     });
   } catch (error) {
     return jsonResponse({
@@ -209,6 +208,134 @@ function normalizePayload(payload: CapturePayload) {
     eeg_context: payload.eeg_context && typeof payload.eeg_context === "object" ? payload.eeg_context : {},
     raw_capture: payload.raw_capture && typeof payload.raw_capture === "object" ? payload.raw_capture : {},
   };
+}
+
+function scheduleEmbeddingUpdate(options: {
+  supabase: ReturnType<typeof createClient>;
+  postId: string;
+  currentStatus: string | null;
+  apiKey: string | undefined;
+  model: string;
+  input: string;
+}) {
+  if (options.currentStatus === "complete") {
+    return {
+      status: "complete",
+      async: false,
+      error: null,
+    };
+  }
+
+  if (!options.apiKey) {
+    const error = "OPENAI_API_KEY is not configured";
+    runInBackground(markEmbeddingFailed({
+      supabase: options.supabase,
+      postId: options.postId,
+      model: options.model,
+      error,
+    }));
+
+    return {
+      status: "failed",
+      async: false,
+      error,
+    };
+  }
+
+  runInBackground(updatePostEmbedding(options));
+
+  return {
+    status: "pending",
+    async: true,
+    error: null,
+  };
+}
+
+function runInBackground(promise: Promise<unknown>) {
+  const edgeRuntime = (globalThis as {
+    EdgeRuntime?: { waitUntil?: (promise: Promise<unknown>) => void };
+  }).EdgeRuntime;
+
+  if (typeof edgeRuntime?.waitUntil === "function") {
+    edgeRuntime.waitUntil(promise);
+    return;
+  }
+
+  promise.catch((error) => {
+    console.error("locked-out embedding background task failed", error);
+  });
+}
+
+async function updatePostEmbedding(options: {
+  supabase: ReturnType<typeof createClient>;
+  postId: string;
+  apiKey: string;
+  model: string;
+  input: string;
+}) {
+  try {
+    const { error: pendingError } = await options.supabase
+      .from("posts")
+      .update({
+        embedding_status: "pending",
+        embedding_model: options.model,
+        embedding_error: null,
+      })
+      .eq("id", options.postId)
+      .neq("embedding_status", "complete");
+
+    if (pendingError) throw pendingError;
+
+    const embeddingResult = await createEmbedding({
+      apiKey: options.apiKey,
+      model: options.model,
+      input: options.input,
+    });
+
+    if (!embeddingResult.ok) {
+      await markEmbeddingFailed({
+        supabase: options.supabase,
+        postId: options.postId,
+        model: options.model,
+        error: embeddingResult.error,
+      });
+      return;
+    }
+
+    const { error: updateError } = await options.supabase
+      .from("posts")
+      .update({
+        embedding: embeddingResult.embedding,
+        embedding_model: options.model,
+        embedding_status: "complete",
+        embedding_error: null,
+      })
+      .eq("id", options.postId)
+      .neq("embedding_status", "complete");
+
+    if (updateError) throw updateError;
+  } catch (error) {
+    console.error("locked-out embedding update failed", error);
+  }
+}
+
+async function markEmbeddingFailed(options: {
+  supabase: ReturnType<typeof createClient>;
+  postId: string;
+  model: string;
+  error: string;
+}) {
+  const { error: updateError } = await options.supabase
+    .from("posts")
+    .update({
+      embedding_model: options.model,
+      embedding_status: "failed",
+      embedding_error: options.error,
+    })
+    .eq("id", options.postId)
+    .neq("embedding_status", "complete");
+
+  if (updateError) throw updateError;
 }
 
 async function createEmbedding(options: { apiKey: string | undefined; model: string; input: string }) {

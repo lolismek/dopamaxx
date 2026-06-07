@@ -304,6 +304,7 @@
           reward_label: response.reward_label,
           reward_score: response.reward_score,
           embedding_status: response.embedding_status,
+          embedding_async: response.embedding_async,
           observation_id: response.observation_id,
         });
       });
