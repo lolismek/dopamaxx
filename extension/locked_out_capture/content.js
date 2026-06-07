@@ -103,6 +103,8 @@
         score: winner.score,
         center_score: winner.centerScore,
         main_visible_ratio: winner.mainVisibleRatio,
+        viewport_coverage: winner.viewportCoverage,
+        eligibility: winner.eligibility,
         rect: rectToJson(winner.candidate.rect),
       };
       currentWinnerSinceMs = nowMs;
@@ -114,6 +116,8 @@
     currentWinner.score = winner.score;
     currentWinner.center_score = winner.centerScore;
     currentWinner.main_visible_ratio = winner.mainVisibleRatio;
+    currentWinner.viewport_coverage = winner.viewportCoverage;
+    currentWinner.eligibility = winner.eligibility;
     currentWinner.rect = rectToJson(winner.candidate.rect);
 
     if (dwellMs < MIN_DWELL_MS) return;
@@ -130,6 +134,8 @@
       viewport_score: Number(winner.score.toFixed(4)),
       center_score: Number(winner.centerScore.toFixed(4)),
       main_visible_ratio: Number(winner.mainVisibleRatio.toFixed(4)),
+      viewport_coverage: Number(winner.viewportCoverage.toFixed(4)),
+      eligibility: winner.eligibility,
       observed_at: new Date().toISOString(),
       raw_capture: {
         url: window.location.href,
@@ -262,6 +268,8 @@
       scroll_idle_before_detection_ms: capture.scroll_idle_before_detection_ms,
       viewport_score: capture.viewport_score,
       main_visible_ratio: capture.main_visible_ratio,
+      viewport_coverage: capture.viewport_coverage,
+      eligibility: capture.eligibility,
     });
 
     try {
@@ -289,6 +297,8 @@
           author: capture.post.author_handle,
           dwell_ms: capture.dwell_ms,
           scroll_idle_before_detection_ms: capture.scroll_idle_before_detection_ms,
+          eligibility: capture.eligibility,
+          viewport_coverage: capture.viewport_coverage,
           extension_round_trip_ms: extensionRoundTripMs,
           supabase_round_trip_ms: response.supabase_round_trip_ms,
           reward_label: response.reward_label,
@@ -316,6 +326,8 @@
       viewport_score: Number(winner.score.toFixed(4)),
       center_score: Number(winner.center_score.toFixed(4)),
       main_visible_ratio: Number(winner.main_visible_ratio.toFixed(4)),
+      viewport_coverage: Number(winner.viewport_coverage.toFixed(4)),
+      eligibility: winner.eligibility,
       scroll_idle_ms: lastScrollAtMs > 0 ? Math.round(nowMs - lastScrollAtMs) : null,
       text_preview: String(winner.post.text || "").slice(0, 120),
     });

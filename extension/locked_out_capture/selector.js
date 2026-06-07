@@ -3,9 +3,13 @@
 
   const DEFAULT_OPTIONS = Object.freeze({
     minMainVisibleRatio: 0.65,
+    minViewportCoverageForTall: 0.55,
+    smallPostMaxViewportRatio: 0.22,
+    smallPostMaxCenterDistance: 0.35,
     centerBandRatio: 0.5,
-    centerWeight: 0.65,
-    visibilityWeight: 0.35,
+    centerWeight: 0.55,
+    visibilityWeight: 0.3,
+    coverageWeight: 0.15,
     ambiguityMargin: 0.08,
   });
 
@@ -27,7 +31,7 @@
 
     const denominator = Math.max(1, Math.min(height, viewportHeight));
     const mainVisibleRatio = visibleHeight / denominator;
-    if (mainVisibleRatio < options.minMainVisibleRatio) return null;
+    const viewportCoverage = visibleHeight / viewportHeight;
 
     const centerY = Number(rect.top) + height / 2;
     const viewportCenterY = viewportHeight / 2;
@@ -35,19 +39,37 @@
     const centerScore = 1 - clamp(centerDistance, 0, 1);
 
     const maxCenterDistance = options.centerBandRatio / 2;
-    if (centerDistance > maxCenterDistance) return null;
+    const isCentered = centerDistance <= maxCenterDistance;
+    const isTallAndDominant =
+      height > viewportHeight && viewportCoverage >= options.minViewportCoverageForTall;
+    const isSmallAndCentered =
+      height / viewportHeight <= options.smallPostMaxViewportRatio &&
+      centerDistance <= options.smallPostMaxCenterDistance;
+    const isMostlyVisibleAndCentered =
+      mainVisibleRatio >= options.minMainVisibleRatio && isCentered;
+
+    if (!isMostlyVisibleAndCentered && !isTallAndDominant && !isSmallAndCentered) {
+      return null;
+    }
 
     const score =
       options.centerWeight * centerScore +
-      options.visibilityWeight * clamp(mainVisibleRatio, 0, 1);
+      options.visibilityWeight * clamp(mainVisibleRatio, 0, 1) +
+      options.coverageWeight * clamp(viewportCoverage, 0, 1);
 
     return {
       candidate,
       score,
       centerScore,
       mainVisibleRatio,
+      viewportCoverage,
       visibleHeight,
       centerDistance,
+      eligibility: isTallAndDominant
+        ? "tall_dominant"
+        : isSmallAndCentered
+          ? "small_centered"
+          : "mostly_visible_centered",
     };
   }
 

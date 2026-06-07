@@ -50,9 +50,33 @@ function testAmbiguousTieReturnsNull() {
   assert.equal(result, null);
 }
 
+function testTallDominantPostCanWin() {
+  const result = selector.pickCenteredPost([
+    candidate("very-long-post", -500, 1100),
+    candidate("small-top", 20, 120),
+  ], 800);
+
+  assert.equal(result.candidate.id, "very-long-post");
+  assert.equal(result.eligibility, "tall_dominant");
+  assert.ok(result.viewportCoverage >= 0.55);
+}
+
+function testSmallCenteredPostCanWin() {
+  const result = selector.pickCenteredPost([
+    candidate("small-off-center", 80, 170),
+    candidate("small-near-middle", 360, 450),
+    candidate("small-low", 660, 750),
+  ], 800);
+
+  assert.equal(result.candidate.id, "small-near-middle");
+  assert.equal(result.eligibility, "small_centered");
+}
+
 testCenteredPostWins();
 testHalfVisiblePostIsIgnored();
 testOutsideCenterBandIsIgnored();
 testAmbiguousTieReturnsNull();
+testTallDominantPostCanWin();
+testSmallCenteredPostCanWin();
 
 console.log("selector tests passed");
