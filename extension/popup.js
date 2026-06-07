@@ -2,8 +2,8 @@ const modeName   = document.getElementById("modeName");
 const timerVal   = document.getElementById("timerVal");
 const focusVal   = document.getElementById("focusVal");
 const rewardVal  = document.getElementById("rewardVal");
-const eegDot     = document.getElementById("eegDot");
-const eegTxt     = document.getElementById("eegTxt");
+const eegStatus  = document.getElementById("eegStatus");
+const eegText    = document.getElementById("eegText");
 const switchBtn  = document.getElementById("switchBtn");
 const demoToggle = document.getElementById("demoToggle");
 
@@ -26,8 +26,8 @@ function render(s) {
   rewardVal.textContent = s.rewardScore != null ? s.rewardScore.toFixed(2) : "—";
   rewardVal.className   = "metric-val" + (s.rewardScore != null ? "" : " dim");
 
-  eegDot.className = "live-dot" + (s.wsConnected ? " on" : "");
-  eegTxt.textContent = s.wsConnected ? "live" : "offline";
+  eegStatus.className = "eeg-status" + (s.wsConnected ? " live" : "");
+  eegText.textContent = s.wsConnected ? "Live" : "Offline";
 
   demoToggle.checked  = s.demoMode;
   switchBtn.disabled  = !s.demoMode;

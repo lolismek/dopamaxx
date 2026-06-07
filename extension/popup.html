@@ -5,140 +5,142 @@
   <title>DopaMAXX</title>
   <style>
     :root {
-      --bg:      #141414;
-      --surface: #1e1e1e;
-      --line:    #2a2a2a;
-      --text:    #f0ede8;
-      --sub:     #6b6b6b;
+      --bg:      #121212;
+      --s1:      #1a1a1a;
+      --s2:      #222222;
+      --line:    rgba(255,255,255,0.07);
+      --text:    #e0deda;
+      --sub:     #5a5a5a;
       --accent:  #e8560a;
-      --on:      #3ecf6a;
-      --off:     #6b6b6b;
+      --live:    #3ecf6a;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      width: 380px;
+      width: 360px;
       background: var(--bg);
       color: var(--text);
       font-family: -apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif;
       -webkit-font-smoothing: antialiased;
     }
 
-    /* ── wordmark row ── */
-    .top {
+    /* ── header ── */
+    .header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 16px 20px 14px;
+      padding: 16px;
       border-bottom: 1px solid var(--line);
     }
 
     .wordmark {
       font-size: 11px;
       font-weight: 700;
-      letter-spacing: 0.1em;
+      letter-spacing: 0.14em;
       text-transform: uppercase;
       color: var(--text);
       flex-shrink: 0;
     }
 
-    .live-dot {
+    .eeg-status {
       display: flex;
       align-items: center;
       gap: 6px;
-      font-size: 10px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--sub);
-      white-space: nowrap;
       flex-shrink: 0;
+      white-space: nowrap;
     }
-    .live-dot span {
+    .eeg-dot {
       width: 5px;
       height: 5px;
       border-radius: 50%;
       background: var(--sub);
       flex-shrink: 0;
     }
-    .live-dot.on { color: var(--on); }
-    .live-dot.on span {
-      background: var(--on);
-      box-shadow: 0 0 0 3px rgba(62,207,106,0.15);
+    .eeg-text {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--sub);
     }
+    .eeg-status.live .eeg-dot  { background: var(--live); }
+    .eeg-status.live .eeg-text { color: var(--live); }
 
-    /* ── mode block ── */
-    .mode-block {
-      padding: 22px 20px 20px;
+    /* ── mode section ── */
+    .mode-section {
+      padding: 24px 16px;
       border-bottom: 1px solid var(--line);
     }
 
-    .mode-label {
+    .section-eyebrow {
       font-size: 9px;
       font-weight: 600;
       letter-spacing: 0.2em;
       text-transform: uppercase;
       color: var(--sub);
-      margin-bottom: 6px;
+      margin-bottom: 4px;   /* tight — eyebrow belongs to the name below it */
     }
 
     .mode-name {
-      font-size: 22px;
+      font-size: 26px;
       font-weight: 300;
-      letter-spacing: 0.02em;
+      letter-spacing: 0.01em;
       color: var(--text);
       line-height: 1;
-      margin-bottom: 14px;
+      margin-bottom: 24px;  /* large gap — separates primary from secondary */
+      transition: color 0.2s;
     }
-    .mode-name.active { color: var(--accent); font-weight: 500; }
+    .mode-name.active {
+      color: var(--accent);
+      font-weight: 500;
+    }
 
-    /* ── metrics row ── */
+    /* ── metrics ── */
     .metrics {
       display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0;
     }
 
-    .metric {
-      padding: 0;
-    }
+    .metric { padding: 0; }
     .metric + .metric {
-      padding-left: 20px;
+      padding-left: 16px;
       border-left: 1px solid var(--line);
-      margin-left: 0;
     }
 
     .metric-val {
-      font-size: 16px;
+      font-size: 15px;
       font-weight: 500;
-      letter-spacing: 0.02em;
       color: var(--text);
       font-variant-numeric: tabular-nums;
       line-height: 1;
-      margin-bottom: 4px;
+      margin-bottom: 5px;
+      transition: color 0.2s;
     }
     .metric-val.dim { color: var(--sub); font-weight: 300; }
 
     .metric-lbl {
       font-size: 9px;
       font-weight: 500;
-      letter-spacing: 0.12em;
+      letter-spacing: 0.14em;
       text-transform: uppercase;
       color: var(--sub);
     }
 
-    /* ── demo block ── */
-    .demo-block {
-      padding: 16px 20px 20px;
+    /* ── demo section ── */
+    .demo-section {
+      padding: 16px;
     }
 
-    .row {
+    .demo-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 12px;
+      margin-bottom: 16px;
     }
 
-    .ctrl-label {
+    .ctrl-eyebrow {
       font-size: 9px;
       font-weight: 600;
       letter-spacing: 0.2em;
@@ -151,58 +153,71 @@
     .toggle input { opacity: 0; width: 0; height: 0; }
     .track {
       position: absolute; inset: 0;
-      background: var(--line);
+      background: var(--s2);
+      border: 1px solid var(--line);
       border-radius: 10px;
       cursor: pointer;
-      transition: background 0.2s;
+      transition: background 0.2s, border-color 0.2s;
     }
     .track:before {
       content: '';
       position: absolute;
       width: 14px; height: 14px;
-      top: 3px; left: 3px;
+      top: 2px; left: 2px;
       background: var(--sub);
       border-radius: 50%;
       transition: transform 0.2s, background 0.2s;
     }
-    input:checked + .track { background: rgba(232,86,10,0.2); }
-    input:checked + .track:before { transform: translateX(14px); background: var(--accent); }
+    input:checked + .track {
+      background: rgba(232,86,10,0.15);
+      border-color: rgba(232,86,10,0.3);
+    }
+    input:checked + .track:before {
+      transform: translateX(14px);
+      background: var(--accent);
+    }
 
     /* button */
     .btn {
       width: 100%;
-      padding: 10px 0;
+      padding: 11px 0;
       border: 1px solid var(--line);
-      border-radius: 3px;
+      border-radius: 2px;
       background: transparent;
       color: var(--sub);
       font-family: inherit;
       font-size: 10px;
       font-weight: 600;
-      letter-spacing: 0.18em;
+      letter-spacing: 0.16em;
       text-transform: uppercase;
       cursor: pointer;
-      transition: border-color 0.15s, color 0.15s;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
     }
-    .btn:not(:disabled):hover { border-color: var(--text); color: var(--text); }
-    .btn:active:not(:disabled) { opacity: 0.7; }
-    .btn:disabled { opacity: 0.25; cursor: not-allowed; }
+    .btn:disabled { opacity: 0.2; cursor: not-allowed; }
+    .btn:not(:disabled):hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
+    .btn:active:not(:disabled) { opacity: 0.6; }
     .btn.armed {
-      border-color: var(--accent);
+      border-color: rgba(232,86,10,0.4);
       color: var(--accent);
     }
-    .btn.armed:not(:disabled):hover { background: rgba(232,86,10,0.06); }
+    .btn.armed:not(:disabled):hover {
+      background: rgba(232,86,10,0.06);
+      border-color: rgba(232,86,10,0.6);
+    }
   </style>
 </head>
 <body>
 
-  <div class="top">
+  <div class="header">
     <span class="wordmark">DopaMAXX</span>
-    <span class="live-dot" id="eegDot"><span></span><span id="eegTxt">offline</span></span>
+    <span class="eeg-status" id="eegStatus">
+      <span class="eeg-dot"></span>
+      <span class="eeg-text" id="eegText">Offline</span>
+    </span>
   </div>
 
-  <div class="mode-block">
-    <div class="mode-label">Mode</div>
+  <div class="mode-section">
+    <div class="section-eyebrow">Mode</div>
     <div class="mode-name" id="modeName">Locked Out</div>
     <div class="metrics">
       <div class="metric">
@@ -220,9 +235,9 @@
     </div>
   </div>
 
-  <div class="demo-block">
-    <div class="row">
-      <span class="ctrl-label">Demo Override</span>
+  <div class="demo-section">
+    <div class="demo-row">
+      <span class="ctrl-eyebrow">Demo Override</span>
       <label class="toggle">
         <input type="checkbox" id="demoToggle" />
         <span class="track"></span>
