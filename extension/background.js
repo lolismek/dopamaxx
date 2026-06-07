@@ -1,12 +1,13 @@
 // Modes
 const MODE_LOCKED_IN = "locked_in";
 const MODE_LOCKED_OUT = "locked_out";
-const BACKEND_URL = "http://127.0.0.1:8000";
-const MICRODOSE_USER_ID = "demo-user";
-const MICRODOSE_SESSION_ID = "demo-session";
+const DEFAULT_BACKEND_URL = "http://127.0.0.1:8000";
+const MICRODOSE_USER_ID = "demo_user";
+const MICRODOSE_SESSION_ID = "demo_session";
 const MICRODOSE_TARGET_COUNT = 20;
 const MICRODOSE_POLL_ALARM = "microdose-poll";
 const EEG_WS_STORAGE_KEY = "dopamaxxEegWsUrl";
+const BACKEND_URL_STORAGE_KEY = "dopamaxxBackendUrl";
 const LOCKED_OUT_CAPTURE_CONFIG_STORAGE_KEY = "lockedOutCaptureConfig";
 const MICRODOSE_READY_TIMEOUT_MS = 60000;
 const MICRODOSE_READY_POLL_MS = 1500;
@@ -33,6 +34,7 @@ let state = {
   rewardScore: null,
   eegFrames: [],
   eegWsUrl: null,
+  backendUrl: DEFAULT_BACKEND_URL,
   ws: null,
   wsConnected: false,
   microdoseReadyCount: 0,
@@ -138,6 +140,32 @@ async function loadEegWsUrl() {
   return normalizeEegWsUrl(stored[EEG_WS_STORAGE_KEY]) ||
     normalizeEegWsUrl(lockedOutConfig.eegWsUrl) ||
     DEFAULT_EEG_WS_URL;
+}
+
+async function loadBackendUrl() {
+  const stored = await chrome.storage.local.get([
+    BACKEND_URL_STORAGE_KEY,
+    LOCKED_OUT_CAPTURE_CONFIG_STORAGE_KEY,
+  ]);
+  const lockedOutConfig = stored[LOCKED_OUT_CAPTURE_CONFIG_STORAGE_KEY] || {};
+  const url = normalizeHttpUrl(stored[BACKEND_URL_STORAGE_KEY]) ||
+    normalizeHttpUrl(lockedOutConfig.backendUrl) ||
+    DEFAULT_BACKEND_URL;
+  state.backendUrl = url;
+  return url;
+}
+
+function normalizeHttpUrl(value) {
+  if (typeof value !== "string" || value.trim() === "") return null;
+
+  try {
+    const url = new URL(value.trim());
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    url.pathname = url.pathname.replace(/\/+$/, "");
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return null;
+  }
 }
 
 function normalizeEegWsUrl(value) {
@@ -347,7 +375,8 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 async function startMicrodoseRun() {
   state.microdoseLastError = null;
-  const response = await fetch(`${BACKEND_URL}/agent/autoscroll/start`, {
+  const backendUrl = await loadBackendUrl();
+  const response = await fetch(`${backendUrl}/agent/autoscroll/start`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -408,7 +437,8 @@ async function waitForMicrodoseReady(runId) {
 }
 
 async function refreshMicrodoseRun(runId) {
-  const response = await fetch(`${BACKEND_URL}/agent/autoscroll/runs/${encodeURIComponent(runId)}`);
+  const backendUrl = await loadBackendUrl();
+  const response = await fetch(`${backendUrl}/agent/autoscroll/runs/${encodeURIComponent(runId)}`);
   if (!response.ok) {
     throw new Error(`autoscroll run poll failed: ${response.status}`);
   }
@@ -441,7 +471,8 @@ async function pollMicrodoseFeed({ openWhenReady, runId = state.microdoseRunId }
 }
 
 async function fetchMicrodoseItems(runId = state.microdoseRunId) {
-  const url = new URL(`${BACKEND_URL}/feed/microdose`);
+  const backendUrl = await loadBackendUrl();
+  const url = new URL(`${backendUrl}/feed/microdose`);
   url.searchParams.set("user_id", MICRODOSE_USER_ID);
   url.searchParams.set("session_id", MICRODOSE_SESSION_ID);
   url.searchParams.set("limit", String(MICRODOSE_TARGET_COUNT));
@@ -456,7 +487,8 @@ async function fetchMicrodoseItems(runId = state.microdoseRunId) {
 }
 
 async function updateMicrodoseItem(queueId, status) {
-  const response = await fetch(`${BACKEND_URL}/feed/microdose/${queueId}`, {
+  const backendUrl = await loadBackendUrl();
+  const response = await fetch(`${backendUrl}/feed/microdose/${queueId}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ status }),
@@ -468,7 +500,8 @@ async function updateMicrodoseItem(queueId, status) {
 }
 
 async function ingestForYouCandidates(posts, sourceUrl, observedAt) {
-  const response = await fetch(`${BACKEND_URL}/feed/for-you/candidates`, {
+  const backendUrl = await loadBackendUrl();
+  const response = await fetch(`${backendUrl}/feed/for-you/candidates`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -514,7 +547,8 @@ function toPostCandidate(post) {
 }
 
 async function openMicrodoseFeed(runId = state.microdoseRunId) {
-  const url = new URL(`${BACKEND_URL}/microdose/feed`);
+  const backendUrl = await loadBackendUrl();
+  const url = new URL(`${backendUrl}/microdose/feed`);
   url.searchParams.set("user_id", MICRODOSE_USER_ID);
   url.searchParams.set("session_id", MICRODOSE_SESSION_ID);
   url.searchParams.set("limit", String(MICRODOSE_TARGET_COUNT));
@@ -649,7 +683,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       .catch((error) => {
         state.forYouLastError = String(error);
         broadcastStatus();
-        sendResponse({ ok: false, error: String(error) });
+        sendResponse({
+          ok: false,
+          error: String(error),
+          backend_url: state.backendUrl,
+          backend_unavailable: isFetchUnavailableError(error),
+        });
       });
     return true;
   }
@@ -689,10 +728,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== "local") return;
-  if (
-    changes[EEG_WS_STORAGE_KEY] ||
-    changes[LOCKED_OUT_CAPTURE_CONFIG_STORAGE_KEY]
-  ) {
+  if (changes[BACKEND_URL_STORAGE_KEY] || changes[LOCKED_OUT_CAPTURE_CONFIG_STORAGE_KEY]) {
+    loadBackendUrl().then(broadcastStatus).catch(() => {});
+  }
+  if (changes[EEG_WS_STORAGE_KEY] || changes[LOCKED_OUT_CAPTURE_CONFIG_STORAGE_KEY]) {
     reconnectWebSocket();
   }
 });
@@ -710,7 +749,7 @@ function getStatus() {
     rewardScore: state.rewardScore,
     workTabId: state.workTabId,
     microdose: {
-      backendUrl: BACKEND_URL,
+      backendUrl: state.backendUrl,
       userId: MICRODOSE_USER_ID,
       sessionId: MICRODOSE_SESSION_ID,
       targetCount: MICRODOSE_TARGET_COUNT,
@@ -728,11 +767,19 @@ function broadcastStatus() {
   chrome.runtime.sendMessage({ type: "status_update", ...getStatus() }).catch(() => {});
 }
 
+function isFetchUnavailableError(error) {
+  const message = String(error && error.message ? error.message : error);
+  return message.includes("Failed to fetch") ||
+    message.includes("NetworkError") ||
+    message.includes("Load failed");
+}
+
 globalThis.dopamaxxGetStatus = getStatus;
 globalThis.dopamaxxBuildLockedOutEegContext = buildLockedOutEegContext;
 
 // ── Init ───────────────────────────────────────────────────────────────────
 
 connectWebSocket();
+loadBackendUrl().then(broadcastStatus).catch(() => {});
 chrome.alarms.create(MICRODOSE_POLL_ALARM, { periodInMinutes: 0.1 });
 importScripts("locked_out_capture/background.js");

@@ -11,6 +11,7 @@
   const MODE_CHANGE_MESSAGE = "mode_change";
   const FOR_YOU_SCAN_INTERVAL_MS = 1500;
   const FOR_YOU_BATCH_LIMIT = 30;
+  const FOR_YOU_BACKOFF_MS = 30000;
   const LOG_PREFIX = "[DopaMAXX locked-out]";
 
   if (typeof globalThis.__dopamaxxLockedOutCaptureStop === "function") {
@@ -28,6 +29,8 @@
   let scanQueued = false;
   let forYouScanQueued = false;
   let lastScrollAtMs = 0;
+  let forYouPausedUntilMs = 0;
+  let forYouLastBackendWarnAtMs = -FOR_YOU_BACKOFF_MS;
   const submittedPostIds = new Set();
   const submittedForYouPostIds = new Set();
   const inflightForYouPostIds = new Set();
@@ -101,6 +104,7 @@
 
   function queueForYouScan() {
     if (!shouldCollectForYouCandidates() || forYouScanQueued) return;
+    if (performance.now() < forYouPausedUntilMs) return;
     forYouScanQueued = true;
     window.requestAnimationFrame(() => {
       forYouScanQueued = false;
@@ -406,15 +410,13 @@
         (response) => {
           for (const post of posts) inflightForYouPostIds.delete(post.platform_post_id);
           if (chrome.runtime.lastError || !response || !response.ok) {
-            console.warn(`${LOG_PREFIX} for-you-candidates-rejected`, {
-              count: posts.length,
-              error: chrome.runtime.lastError
-                ? chrome.runtime.lastError.message
-                : response && response.error,
-            });
+            handleForYouCandidateError(posts.length, chrome.runtime.lastError
+              ? chrome.runtime.lastError.message
+              : response && response.error, response);
             return;
           }
 
+          forYouPausedUntilMs = 0;
           for (const post of posts) submittedForYouPostIds.add(post.platform_post_id);
           console.debug(`${LOG_PREFIX} for-you-candidates-buffered`, {
             count: posts.length,
@@ -424,11 +426,38 @@
       );
     } catch (error) {
       for (const post of posts) inflightForYouPostIds.delete(post.platform_post_id);
-      console.warn(`${LOG_PREFIX} for-you-candidates-error`, {
-        count: posts.length,
-        error: error && error.message ? error.message : String(error),
-      });
+      handleForYouCandidateError(posts.length, error && error.message ? error.message : String(error), null);
     }
+  }
+
+  function handleForYouCandidateError(count, error, response) {
+    const message = String(error || "unknown error");
+    if (isBackendUnavailable(message, response)) {
+      const nowMs = performance.now();
+      forYouPausedUntilMs = nowMs + FOR_YOU_BACKOFF_MS;
+      if (nowMs - forYouLastBackendWarnAtMs >= FOR_YOU_BACKOFF_MS) {
+        forYouLastBackendWarnAtMs = nowMs;
+        console.warn(`${LOG_PREFIX} for-you-candidates-paused`, {
+          count,
+          error: message,
+          backend_url: response && response.backend_url,
+          retry_in_ms: FOR_YOU_BACKOFF_MS,
+        });
+      }
+      return;
+    }
+
+    console.warn(`${LOG_PREFIX} for-you-candidates-rejected`, {
+      count,
+      error: message,
+    });
+  }
+
+  function isBackendUnavailable(message, response) {
+    return Boolean(response && response.backend_unavailable) ||
+      message.includes("Failed to fetch") ||
+      message.includes("NetworkError") ||
+      message.includes("Load failed");
   }
 
   function logCandidateDetected(winner, nowMs) {

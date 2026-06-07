@@ -89,6 +89,7 @@ class AutoscrollService:
         scored: dict[str, ScoredCandidate] = {}
         deadline = asyncio.get_running_loop().time() + request.timeout_s
         empty_fetches = 0
+        rejected_count = 0
 
         try:
             while (
@@ -118,6 +119,9 @@ class AutoscrollService:
                         continue
                     embedding = await self.embedder.embed_post(candidate)
                     score = self.scorer.score(embedding, reactions)
+                    if not score.recommended:
+                        rejected_count += 1
+                        continue
                     scored[candidate.post_id] = ScoredCandidate(
                         post=candidate,
                         embedding=embedding,
@@ -139,6 +143,9 @@ class AutoscrollService:
                     {
                         "fetched_count": fetched_count,
                         "accepted_count": min(len(scored), request.target_count),
+                        "error": None
+                        if scored
+                        else f"waiting for high-reward matches; rejected {rejected_count}",
                     },
                 )
 
@@ -149,6 +156,7 @@ class AutoscrollService:
                         "cancelled",
                         fetched_count=fetched_count,
                         accepted_count=min(len(scored), request.target_count),
+                        error=f"cancelled after rejecting {rejected_count} low-similarity candidates",
                     ),
                 )
                 return
@@ -169,6 +177,9 @@ class AutoscrollService:
                     fetched_count=fetched_count,
                     accepted_count=len(queue_items),
                     queued_count=len(queue_items),
+                    error=None
+                    if queue_items
+                    else "no candidates were similar enough to high-reward locked-out posts",
                 ),
             )
         except Exception as exc:

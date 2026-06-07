@@ -141,7 +141,7 @@ class SupabaseContentStore:
         return PostReaction.model_validate(rows[0])
 
     async def list_preference_reactions(self, user_id: str, limit: int = 500) -> list[PostReaction]:
-        rows = await self._request(
+        reaction_rows = await self._optional_request(
             "GET",
             "post_reactions",
             params={
@@ -152,7 +152,31 @@ class SupabaseContentStore:
                 "limit": str(limit),
             },
         )
-        return [PostReaction.model_validate(row) for row in rows]
+        observation_rows = await self._optional_request(
+            "GET",
+            "post_observations",
+            params={
+                "select": (
+                    "id,user_id,session_id,reward_score,reward_label,focus_score,dwell_ms,"
+                    "eeg_context,raw_observation,observed_at,created_at,"
+                    "posts!inner(id,platform_post_id,canonical_url,author_handle,author_name,"
+                    "text,media,embedding,embedding_status)"
+                ),
+                "user_id": f"eq.{user_id}",
+                "reward_label": "in.(hit,miss)",
+                "order": "observed_at.desc",
+                "limit": str(limit),
+            },
+        )
+
+        reactions = [
+            PostReaction.model_validate(self._normalize_reaction_row(row))
+            for row in reaction_rows
+            if self._parse_embedding(row.get("embedding"))
+        ]
+        reactions.extend(self._reaction_from_locked_out_observation(row) for row in observation_rows)
+        reactions = [reaction for reaction in reactions if reaction.embedding]
+        return self._dedupe_reactions(reactions)[:limit]
 
     async def create_agent_run(self, run: AgentRun) -> AgentRun:
         rows = await self._request(
@@ -248,6 +272,24 @@ class SupabaseContentStore:
                 return []
             return response.json()
 
+    async def _optional_request(
+        self,
+        method: str,
+        table: str,
+        params: dict[str, str] | None = None,
+        json: Any | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> Any:
+        try:
+            return await self._request(method, table, params=params, json=json, headers=headers)
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 404:
+                return []
+            text = exc.response.text.lower()
+            if "could not find the table" in text or "schema cache" in text:
+                return []
+            raise
+
     @staticmethod
     def _dump(model: AgentRun | PostReaction | QueueItem) -> dict[str, Any]:
         return SupabaseContentStore._normalize_json(model.model_dump(mode="json"))
@@ -259,6 +301,114 @@ class SupabaseContentStore:
         if isinstance(value, list):
             return [SupabaseContentStore._normalize_json(inner) for inner in value]
         return value
+
+    @classmethod
+    def _normalize_reaction_row(cls, row: dict[str, Any]) -> dict[str, Any]:
+        normalized = dict(row)
+        normalized["embedding"] = cls._parse_embedding(row.get("embedding"))
+        normalized["media_urls"] = cls._normalize_media_urls(row.get("media_urls"))
+        return normalized
+
+    @classmethod
+    def _reaction_from_locked_out_observation(cls, row: dict[str, Any]) -> PostReaction:
+        post = row.get("posts")
+        if not isinstance(post, dict):
+            post = {}
+
+        embedding = cls._parse_embedding(post.get("embedding"))
+        return PostReaction(
+            reaction_id=f"locked-out-{row.get('id')}",
+            user_id=str(row.get("user_id") or ""),
+            session_id=str(row.get("session_id") or ""),
+            post_id=str(post.get("platform_post_id") or post.get("id") or row.get("id") or ""),
+            text=str(post.get("text") or ""),
+            author=post.get("author_handle") or post.get("author_name"),
+            url=post.get("canonical_url"),
+            media_urls=cls._normalize_media_urls(post.get("media")),
+            embedding=embedding,
+            reward_score=float(row.get("reward_score") or 0.0),
+            focus_score=cls._optional_float(row.get("focus_score")),
+            label=cls._reaction_label(row.get("reward_label")),
+            dwell_ms=max(0, int(row.get("dwell_ms") or 0)),
+            eeg_features={},
+            metadata={
+                "source": "locked_out_capture",
+                "post_metadata": {
+                    "supabase_post_id": post.get("id"),
+                    "embedding_status": post.get("embedding_status"),
+                },
+                "observation_id": row.get("id"),
+                "observed_at": row.get("observed_at"),
+                "eeg_context": row.get("eeg_context") if isinstance(row.get("eeg_context"), dict) else {},
+            },
+            created_at=str(row.get("observed_at") or row.get("created_at") or utc_now_iso()),
+        )
+
+    @staticmethod
+    def _reaction_label(value: Any) -> str:
+        return value if value in {"hit", "miss", "neutral"} else "neutral"
+
+    @staticmethod
+    def _optional_float(value: Any) -> float | None:
+        if value is None or value == "":
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    @staticmethod
+    def _parse_embedding(value: Any) -> list[float]:
+        if isinstance(value, list):
+            try:
+                return [float(item) for item in value]
+            except (TypeError, ValueError):
+                return []
+        if not isinstance(value, str):
+            return []
+
+        stripped = value.strip()
+        if not stripped or stripped in {"[]", "{}"}:
+            return []
+        if (stripped.startswith("[") and stripped.endswith("]")) or (
+            stripped.startswith("{") and stripped.endswith("}")
+        ):
+            stripped = stripped[1:-1]
+        if not stripped:
+            return []
+        try:
+            return [float(part.strip()) for part in stripped.split(",") if part.strip()]
+        except ValueError:
+            return []
+
+    @staticmethod
+    def _normalize_media_urls(value: Any) -> list[str]:
+        if not isinstance(value, list):
+            return []
+
+        urls: list[str] = []
+        for item in value:
+            if isinstance(item, str):
+                if item:
+                    urls.append(item)
+                continue
+            if isinstance(item, dict):
+                url = item.get("src") or item.get("poster")
+                if url:
+                    urls.append(str(url))
+        return urls
+
+    @staticmethod
+    def _dedupe_reactions(reactions: list[PostReaction]) -> list[PostReaction]:
+        by_post_id: dict[str, PostReaction] = {}
+        for reaction in reactions:
+            existing = by_post_id.get(reaction.post_id)
+            if existing is None or abs(reaction.reward_score) > abs(existing.reward_score):
+                by_post_id[reaction.post_id] = reaction
+
+        deduped = list(by_post_id.values())
+        deduped.sort(key=lambda reaction: reaction.created_at, reverse=True)
+        return deduped
 
 
 def content_store_from_env() -> ContentStore:

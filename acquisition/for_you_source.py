@@ -64,6 +64,7 @@ class ForYouCandidateSource:
         user_id = str(query_context.get("user_id") or "")
         session_id = str(query_context.get("session_id") or "")
         prefer_for_you = query_context.get("candidate_source") in {None, "x_for_you", "for_you"}
+        target_count = _positive_int(query_context.get("target_count")) or limit
 
         candidates: list[PostCandidate] = []
         seen: set[str] = set()
@@ -71,9 +72,16 @@ class ForYouCandidateSource:
         if prefer_for_you and user_id:
             candidates = await self._list_buffered(user_id=user_id, session_id=session_id, limit=limit)
             seen.update(candidate.post_id for candidate in candidates)
+            if len(candidates) >= min(limit, target_count):
+                return candidates[:limit]
 
         if len(candidates) < limit and self.fallback is not None:
-            fallback = await self.fallback.fetch_candidates(query_context, limit - len(candidates))
+            try:
+                fallback = await self.fallback.fetch_candidates(query_context, limit - len(candidates))
+            except Exception:
+                if candidates:
+                    return candidates[:limit]
+                raise
             for candidate in fallback:
                 if candidate.post_id in seen:
                     continue
@@ -120,3 +128,11 @@ class ForYouCandidateSource:
         for key, _candidate in user_candidates[self.max_per_user :]:
             if key not in keep:
                 self._candidates.pop(key, None)
+
+
+def _positive_int(value: Any) -> int | None:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number > 0 else None
