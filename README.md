@@ -2,90 +2,271 @@
 
 **Work harder, play harder.**
 
-DopaMAXX is an EEG-driven focus companion for people who want the reward loop of
-social media without letting it own their work session. A DSI-24 EEG cap streams
-live brain signals, DopaMAXX estimates focus and reward proxies, and the app uses
-those signals to decide when to protect work and when to serve a short,
-personalized content break.
+DopaMAXX is an EEG-driven focus companion that turns social media from an
+uncontrolled distraction into a measured, personalized reward loop. A DSI-24 EEG
+cap streams live brain signals, a Chrome extension watches what the user pauses
+on in X/Twitter, and a Supabase-backed recommendation system learns which posts
+produce positive focus/reward responses. When the user starts drifting during a
+work session, DopaMAXX serves a tiny "microdose" of content predicted to
+re-engage them, then sends them back to work.
 
-Built as a hackathon project by zane, casper, ansh, and alex.
+Built for a hackathon by **zane, casper, ansh, and alex**.
 
-![DopaMAXX extension popup](attached_assets/Screenshot_2026-06-07_at_2.52.40_PM_1780858362454.png)
+![DopaMAXX Chrome extension popup](attached_assets/Screenshot_2026-06-07_at_2.52.40_PM_1780858362454.png)
 
-## The Idea
+## What It Does
 
-Most focus tools treat distraction as binary: block everything, then release the
-block on a timer. DopaMAXX makes the loop adaptive:
+DopaMAXX has two modes. In **Locked Out**, the user is allowed to scroll
+X/Twitter. The extension detects the post they actually dwell on, pairs that
+post with the user's live EEG-derived reward/focus state, and stores the result
+as a labeled memory: hit, miss, or neutral. In **Locked In**, distracting sites
+are blocked while the EEG stream monitors whether the user is still focused. If
+focus drops, DopaMAXX runs a retrieval-and-ranking loop over candidate posts,
+selects content similar to prior EEG-positive hits and dissimilar to misses, and
+shows only a short microdose before returning the user to work.
 
-| Mode | What the user does | What DopaMAXX learns |
-| --- | --- | --- |
-| Locked In | Work in a distraction-constrained session | Whether focus is stable or drifting |
-| Locked Out | Freely scroll Twitter/X during an earned break | Which posts create a positive EEG reward response |
-| Microdose | See 1 to 3 curated posts while drifting | Whether a tiny reward is enough to re-engage |
+The core idea is simple: most focus products only block dopamine. DopaMAXX learns
+what kind of content your brain responds to, then uses that content precisely
+when it can help you recover focus instead of falling into a scroll spiral.
 
-The key feedback loop:
+Important scope note: DopaMAXX does **not** claim to measure dopamine directly.
+In this project, "dopamine" means an explainable EEG-derived reward/engagement
+proxy from the headset stream.
 
-1. During Locked Out, the Chrome extension watches the centered Twitter/X post.
-2. After a dwell threshold, the post is paired with derived EEG context.
-3. Supabase stores the post, the reward label, and an embedding.
-4. During Locked In, the autoscroll engine ranks candidate posts against prior
-   EEG-positive examples.
-5. If focus drops, the microdose feed serves a small, personalized burst and then
-   hands the user back to work.
+## The Problem
 
-Important note: DopaMAXX does not claim to measure dopamine directly. In this
-repo, "dopamine" means an explainable EEG-derived reward/engagement proxy.
+Modern focus tools treat distraction as binary: block the site or unblock the
+site. That misses how people actually work. Sometimes a short reward helps a
+person reset. Sometimes a five-minute break becomes thirty minutes of scrolling.
+The missing piece is feedback: the system does not know whether the user's brain
+is focused, drifting, bored, or re-engaged.
 
-## What Works Today
+Social platforms already optimize the reward loop, but they optimize it for time
+spent on platform. We asked a different question: what if the reward loop could
+be controlled by the user and grounded in their own live cognitive state?
 
-- Live DSI-24 acquisition service with simulator mode.
-- Browser dashboard with raw EEG, derived focus/reward metrics, and demo status.
-- Chrome MV3 extension for Locked In blocking, Locked Out capture, and demo
-  controls.
-- Twitter/X post selector that chooses the centered, stable post after dwell.
-- Supabase Edge Function that stores posts, observations, and OpenAI embeddings.
-- Supabase-backed autoscroll/microdose queue for Locked In recommendations.
-- Offline fallback embeddings for demos and tests when external services are not
-  available.
-- Focused Python and Node test coverage for acquisition, selector behavior,
-  contracts, scoring, and extension prompt data.
+## The Solution
+
+DopaMAXX combines a real EEG acquisition pipeline, a browser extension, and a
+RAG-style recommendation engine into one closed feedback loop:
+
+1. **Measure focus:** stream DSI-24 EEG data and derive live focus/reward scores.
+2. **Learn taste:** capture X/Twitter posts the user dwells on during earned
+   breaks and label them with EEG reward signals.
+3. **Retrieve rewards:** embed posts, store them in Supabase/pgvector, and use
+   prior EEG-positive hits as the user's personal retrieval memory.
+4. **Microdose content:** when focus drifts, rank fresh candidates against that
+   memory and show a small, capped set of posts.
+5. **Return to work:** once focus recovers or the cap is reached, DopaMAXX closes
+   the loop and puts the user back into Locked In mode.
+
+## Project Workflow
+
+In a demo, the user puts on the DSI-24 EEG cap and starts a work session in the
+Chrome extension. While they are Locked In, distracting sites are blocked and the
+dashboard shows live brain-derived focus signals. During a break, the user enters
+Locked Out mode and scrolls X/Twitter normally. DopaMAXX watches which posts stay
+centered on screen long enough to matter, records the surrounding EEG response,
+and learns which posts were rewarding. Later, if the user starts losing focus
+while working, DopaMAXX retrieves a few posts that look similar to past
+EEG-positive hits, shows them as a controlled microdose, and then redirects the
+user back into the work session.
+
+## Technical Summary
+
+Technically, DopaMAXX is a retrieval-augmented recommendation system where the
+retrieval corpus is built from the user's own EEG-labeled reactions. The DSI-24
+stream is ingested through a FastAPI acquisition service, normalized into derived
+focus and reward frames, and exposed over WebSockets. The Chrome MV3 extension
+captures dwell-gated X/Twitter posts, sends post metadata plus derived EEG
+context to a Supabase Edge Function, and stores observations in Postgres with
+vector embeddings. The ranking algorithm scores candidate posts by similarity to
+the user's hit set minus similarity to their miss set, so the recommendation
+target is not generic engagement - it is the user's measured neural response.
+TRIBE v2 can improve this RAG loop by replacing generic text embeddings with
+brain-aligned content signatures, allowing retrieval to match posts by predicted
+activation pattern rather than only by surface-level semantic similarity.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  DSI[DSI-24 EEG cap] --> Bridge[dsi2lsl.exe / LSL]
+  DSI[DSI-24 EEG cap] --> Bridge[dsi2lsl / LSL bridge]
   Bridge --> Acquisition[FastAPI acquisition service]
-  Acquisition --> Dashboard[Live dashboard]
-  Acquisition --> EEGWS[ws://.../stream/eeg]
+  Acquisition --> Dashboard[Live EEG dashboard]
+  Acquisition --> EEGWS[Derived EEG WebSocket]
 
-  Chrome[Chrome extension] --> X[Twitter/X page]
-  X --> Selector[Centered post selector]
-  Selector --> Chrome
-  EEGWS --> Chrome
-  Chrome --> Edge[Supabase Edge Function]
-  Edge --> DB[(Supabase Postgres + pgvector)]
-  Edge --> OpenAI[OpenAI embeddings]
+  X[X/Twitter page] --> Selector[Dwell-gated post selector]
+  Selector --> Extension[Chrome MV3 extension]
+  EEGWS --> Extension
 
-  Acquisition --> Agent[Autoscroll service]
-  DB --> Agent
-  Agent --> Queue[Microdose queue]
+  Extension --> Edge[Supabase Edge Function]
+  Edge --> DB[(Postgres + pgvector)]
+  Edge --> Embed[Embedding provider]
+
+  DB --> Ranker[Autoscroll / microdose ranker]
+  Ranker --> Queue[Microdose queue]
   Queue --> Feed[Microdose feed]
+  Feed --> User[User re-engages]
 ```
 
-## Repo Map
+| Layer | What it does | Repo path |
+| --- | --- | --- |
+| EEG acquisition | Starts the DSI-24 bridge, reads LSL, computes live focus/reward frames, serves dashboard and WebSockets | `acquisition/` |
+| Browser extension | Blocks distractions, controls modes, captures centered X/Twitter posts, connects to EEG stream | `extension/` |
+| Locked Out capture | Supabase Edge Function, SQL schema, capture contract, selector tests | `locked_out_capture/` |
+| Recommendation memory | Stores posts, observations, labels, embeddings, and microdose queue state | `supabase/migrations/` |
+| TRIBE experiments | Text-to-signature experiments and fake backend for future embedding upgrades | `tribev2_text/` |
+| Ranking experiments | CLI tools for scoring and ranking Twitter candidates | `twitter_scorer/` |
 
-| Path | Purpose |
-| --- | --- |
-| `acquisition/` | FastAPI service, DSI-24 bridge integration, simulator, EEG WebSockets, dashboard, autoscroll API |
-| `extension/` | Chrome MV3 extension, popup UI, Locked In blocking, Locked Out capture scripts |
-| `locked_out_capture/` | Supabase Edge Function, SQL migrations, EEG capture contract, selector tests |
-| `supabase/migrations/` | Autoscroll and microdose queue schema |
-| `tribev2_text/` | Standalone text-to-signature experiments and deterministic fake backend |
-| `twitter_scorer/` | CLI experiments for ranking Twitter posts with TRIBE/EEG scores |
-| `PRD.md` | Product requirements and deeper design rationale |
+## The RAG And Ranking Loop
 
-## Quickstart: Local Simulator Demo
+DopaMAXX uses RAG, but the "documents" are not static docs. They are the user's
+own content reactions.
+
+- **Capture corpus:** every dwelled post becomes a record with text, author/time
+  metadata, dwell timing, focus score, reward score, and a reward label.
+- **Embedding layer:** each post is embedded and stored in Supabase with
+  pgvector. The current implementation supports OpenAI embeddings and local
+  deterministic fallbacks for demos/tests.
+- **Hit/miss memory:** posts with positive EEG reward become the hit set; posts
+  with negative reward become the miss set.
+- **Candidate retrieval:** candidate posts from the extension buffer or a
+  Twitter/X source are embedded and compared against the memory.
+- **Ranking algorithm:** score candidates by weighted similarity to hits minus a
+  penalty for similarity to misses.
+- **Microdose policy:** serve only the top few posts, enforce caps, and exit when
+  focus recovers or the microdose limit is reached.
+
+The scoring shape is intentionally explainable:
+
+```text
+predicted_reward(candidate)
+  = similarity(candidate, EEG-positive hits)
+  - lambda * similarity(candidate, EEG-negative misses)
+```
+
+TRIBE v2 would make this more powerful by producing richer content signatures
+that can represent topics, tone, media style, and predicted brain response. In
+the current system, two posts are similar if their embeddings are semantically
+close. With TRIBE v2, two posts could be similar because they belong to the same
+personal "tribe" of content that historically produces the same neural reward
+pattern for this user. That turns the retrieval layer from generic semantic
+search into a personalized brain-aligned memory.
+
+## How We Built It
+
+**The EEG acquisition service** is a Python FastAPI app that can run against a
+real DSI-24 headset or a simulator. In real hardware mode, the Windows capture
+machine launches the vendor `dsi2lsl` bridge, reads the `DSI24-EEG` LSL stream,
+and exposes both raw and derived streams. The derived stream is what the rest of
+the app consumes: focus score, reward score, signal quality, dominant band, and
+metadata.
+
+**The Chrome extension** is a Manifest V3 extension with no build step. It owns
+the user-facing modes, blocks distracting sites in Locked In, and injects a
+Locked Out content script into X/Twitter. The content script chooses the centered
+post, waits for a dwell threshold, and sends only stable post candidates forward.
+
+**The Supabase capture pipeline** receives post captures through an Edge
+Function. It upserts post records, stores EEG-derived observation rows, generates
+embeddings, and keeps browser-safe keys separate from backend-only service keys.
+The extension never receives the service-role key, database password, or OpenAI
+API key.
+
+**The autoscroll/microdose engine** is exposed through the acquisition service.
+It reads prior EEG-labeled memories from Supabase or an in-memory fallback,
+scores fresh candidates, writes a queue of microdose items, and serves a small
+feed that can be shown during a drift event.
+
+**The demo dashboard** gives judges something concrete to watch: live EEG
+status, stream metadata, focus/reward inference, mode changes, and microdose
+results.
+
+## Demo Media Slots
+
+Use this section as a checklist for the Devpost submission. Drop final assets
+into `attached_assets/` or a future `docs/devpost/` folder.
+
+| Slot | What to show | Suggested asset |
+| --- | --- | --- |
+| Hero | The extension popup or live dashboard with the DSI-24 running | Existing screenshot above |
+| Workflow | Three-panel flow: Locked Out capture -> RAG memory -> Locked In microdose | `docs/devpost/workflow.png` |
+| Architecture | The Mermaid diagram above exported as an image | `docs/devpost/architecture.png` |
+| Live EEG | Dashboard showing hardware stream, focus score, and reward score | `docs/devpost/live-eeg.png` |
+| Microdose | Ranked feed of posts selected from EEG-positive history | `docs/devpost/microdose-feed.png` |
+
+## What Works Today
+
+- Live DSI-24 acquisition service with simulator mode.
+- Browser dashboard for raw EEG status and derived focus/reward metrics.
+- Chrome extension for Locked In blocking, Locked Out capture, and demo control.
+- Dwell-gated X/Twitter selector for centered, stable posts.
+- Supabase Edge Function for post capture, observation storage, and embeddings.
+- Supabase-backed autoscroll/microdose queue.
+- Local fallback embeddings and in-memory stores for demos without cloud setup.
+- Focused Python and Node tests for acquisition, selectors, contracts, scoring,
+  and extension prompt data.
+
+## Challenges We Ran Into
+
+- **Real-time EEG is noisy.** We needed simulator mode, quality metadata, and
+  derived frames so the rest of the app did not depend on raw samples directly.
+- **Browser extension contexts are fragile during live demos.** Reloading an
+  unpacked extension can invalidate old content scripts, so the extension now
+  guards against stale contexts and refreshes X/Twitter tabs after reload.
+- **X/Twitter DOM selection is unstable.** The selector has to choose the
+  centered visible post and wait for dwell, not just grab the first matching DOM
+  node.
+- **Secrets cannot live in the extension.** Supabase service-role keys and
+  OpenAI keys have to stay in Edge Functions or backend services.
+- **A recommender can become the distraction.** The microdose loop needs caps,
+  queue state, and a return-to-work condition so it stays bounded.
+
+## Accomplishments
+
+- Built an end-to-end EEG-to-browser loop with real DSI-24 hardware support.
+- Captured live X/Twitter dwell events and paired them with EEG-derived reward
+  labels.
+- Stored a personalized post memory in Supabase with embeddings and observation
+  metadata.
+- Implemented a RAG-style ranker that retrieves content from the user's own
+  EEG-positive history.
+- Connected the ranker to a microdose feed that can be triggered during focus
+  drift.
+- Kept the demo runnable without hardware or cloud services through simulator
+  and fallback paths.
+
+## What We Learned
+
+Personalization gets much more interesting when the feedback signal is not just
+a click. Dwell time, likes, and follows are indirect proxies for preference; EEG
+lets us experiment with a more immediate signal of attention, reward, and
+re-engagement. We also learned that the hard part is not one model call. It is
+the system boundary between hardware streams, browser state, cloud storage,
+security, and a demo that still works under hackathon pressure.
+
+## What's Next
+
+- Per-user EEG calibration instead of fixed heuristic thresholds.
+- TRIBE v2 embeddings or signatures for brain-aligned retrieval.
+- Multimodal post embeddings that include image/video content.
+- A learned preference head trained on the user's EEG hit/miss history.
+- Stronger artifact rejection for blinks, motion, and disconnected electrodes.
+- Authenticated multi-user profiles and encrypted personal memories.
+- Better operator console for live judging and deterministic demos.
+
+## Built With
+
+- **Wearable Sensing DSI-24** for 19-channel EEG acquisition.
+- **FastAPI** for the acquisition service, dashboard routes, and WebSockets.
+- **Chrome Manifest V3** for browser blocking, capture, and mode control.
+- **Supabase** for Postgres, Edge Functions, and vector-backed memory.
+- **OpenAI embeddings** for the current post embedding path.
+- **TRIBE v2 concepts** for the next-generation content signature layer.
+- **Python and Node.js** for acquisition, ranking, tests, and extension logic.
+
+## Quickstart: Simulator Demo
 
 Use this path when you do not have the DSI-24 cap connected.
 
@@ -105,7 +286,7 @@ Open:
 http://127.0.0.1:8000
 ```
 
-Useful simulator endpoints:
+Useful local routes:
 
 | URL | Use |
 | --- | --- |
@@ -144,16 +325,7 @@ that need raw samples.
 
 ## Supabase Setup
 
-For the team demo project currently linked from this workspace:
-
-```text
-project ref: kbnbpangliwqthtjpgxm
-project url: https://kbnbpangliwqthtjpgxm.supabase.co
-```
-
-If you fork this project, replace those values with your own Supabase project.
-
-Apply the SQL migrations in this order:
+Create a Supabase project, then apply the SQL migrations in this order:
 
 1. `locked_out_capture/supabase/migrations/001_locked_out_capture.sql`
 2. `locked_out_capture/supabase/migrations/002_add_focus_score_to_post_observations.sql`
@@ -170,14 +342,15 @@ supabase secrets set OPENAI_EMBEDDING_MODEL=text-embedding-3-small
 ```
 
 Supabase provides `SUPABASE_URL` and secret keys to deployed functions. Do not
-put the OpenAI key or Supabase service-role key in the Chrome extension.
+put the OpenAI key, Supabase service-role key, or database password in the
+Chrome extension.
 
 ## Environment Variables
 
 Backend/acquisition service:
 
 ```sh
-export DOPAMAXX_SUPABASE_URL="https://kbnbpangliwqthtjpgxm.supabase.co"
+export DOPAMAXX_SUPABASE_URL="https://<project-ref>.supabase.co"
 export DOPAMAXX_SUPABASE_SERVICE_ROLE_KEY="<backend-only-service-role-key>"
 
 # Optional: use OpenAI embeddings from the acquisition service.
@@ -187,15 +360,6 @@ export OPENAI_EMBEDDING_MODEL="text-embedding-3-small"
 # Optional: fetch live candidates through a Twitter/X MCP endpoint.
 export DOPAMAXX_TWITTER_MCP_URL="http://127.0.0.1:9000/mcp"
 export DOPAMAXX_TWITTER_MCP_FETCH_TOOL="twitter.search_candidates"
-```
-
-Windows PowerShell equivalent:
-
-```powershell
-$env:DOPAMAXX_SUPABASE_URL = "https://kbnbpangliwqthtjpgxm.supabase.co"
-$env:DOPAMAXX_SUPABASE_SERVICE_ROLE_KEY = "<backend-only-service-role-key>"
-$env:DOPAMAXX_OPENAI_API_KEY = "<openai-api-key>"
-$env:OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
 ```
 
 Secret-handling rule:
@@ -219,7 +383,7 @@ Secret-handling rule:
 ```js
 chrome.storage.local.set({
   lockedOutCaptureConfig: {
-    supabaseFunctionUrl: "https://kbnbpangliwqthtjpgxm.supabase.co/functions/v1/capture-post",
+    supabaseFunctionUrl: "https://<project-ref>.supabase.co/functions/v1/capture-post",
     supabaseAnonKey: "<supabase-publishable-or-anon-key>",
     userId: "demo_user",
     eegWsUrl: "ws://127.0.0.1:8000/stream/eeg"
@@ -232,8 +396,6 @@ For a hardware demo, change `eegWsUrl` to the capture laptop:
 ```js
 eegWsUrl: "ws://<capture-ip>:8765/stream/eeg"
 ```
-
-The extension never stores the service-role key.
 
 ## Microdose Flow
 
@@ -250,7 +412,7 @@ curl -X POST http://127.0.0.1:8000/agent/autoscroll/start \
   }'
 ```
 
-Open the feed:
+Open the human-facing feed:
 
 ```text
 http://127.0.0.1:8000/microdose/feed?user_id=demo-user&session_id=demo-session
@@ -267,13 +429,13 @@ buffered For You observations or a configured Twitter/X MCP source. If neither
 is available, local tests and simulator demos still exercise the ranking logic
 with deterministic fallback embeddings.
 
-## Hackathon Demo Script
+## Demo Script
 
 1. Start the acquisition server in simulator mode or from the DSI-24 capture
    laptop.
 2. Open the dashboard and show live focus/reward movement.
 3. Load the Chrome extension and switch between Locked In and Locked Out.
-4. In Locked Out, scroll Twitter/X and dwell on a post long enough for capture.
+4. In Locked Out, scroll X/Twitter and dwell on a post long enough for capture.
 5. Show the Supabase observation row and embedding status.
 6. Switch back to Locked In and start a microdose run.
 7. Open the microdose feed and show posts ranked from prior EEG-positive
@@ -285,10 +447,10 @@ with deterministic fallback embeddings.
 
 | Method | Route | Purpose |
 | --- | --- | --- |
-| `GET` | `/` | Dashboard |
+| `GET` | `/` | Live dashboard |
 | `GET` | `/health` | Acquisition runtime health |
-| `GET` | `/metadata` | Channel labels, sample rate, source mode |
-| `POST` | `/sim/inject` | Inject simulator state |
+| `GET` | `/metadata` | Channel labels, sample rate, and source mode |
+| `POST` | `/sim/inject` | Inject simulator focus/reward state |
 | `WS` | `/stream/eeg` | Derived EEG frames with focus/reward inference |
 | `WS` | `/stream/raw` | Binary raw EEG stream |
 | `WS` | `/stream/raw-json` | Debug JSON raw EEG stream |
@@ -297,7 +459,8 @@ with deterministic fallback embeddings.
 | `POST` | `/agent/autoscroll/start` | Start a recommendation run |
 | `POST` | `/agent/autoscroll/cancel` | Cancel a recommendation run |
 | `GET` | `/agent/autoscroll/runs/{run_id}` | Inspect run status |
-| `GET` | `/feed/microdose` | Read queued microdose items |
+| `GET` | `/microdose/feed` | Human-facing microdose feed |
+| `GET` | `/feed/microdose` | Read queued microdose items as JSON |
 | `PATCH` | `/feed/microdose/{queue_id}` | Mark an item shown, dismissed, or consumed |
 
 ## Testing
@@ -340,15 +503,5 @@ RUN_TRIBEV2_INTEGRATION=1 python -m pytest tribev2_text/tests/test_integration.p
 | Real headset will not stream | Close DSI-Streamer before starting DopaMAXX; the COM port cannot be shared |
 | Capture says it is not configured | Re-run the `chrome.storage.local.set(...)` snippet in the service worker console |
 | Supabase returns 401/403 | Use the publishable/anon key in Chrome and service-role key only on backend |
-| Embeddings stay pending/failed | Check the Edge Function `OPENAI_API_KEY` secret |
+| Embeddings stay pending or failed | Check the Edge Function `OPENAI_API_KEY` secret |
 | Microdose queue is empty | Seed Locked Out hits first or configure a Twitter/X MCP candidate source |
-
-## Future Work
-
-- Per-user calibration instead of fixed heuristic thresholds.
-- Learned preference head on top of post embeddings.
-- Stronger artifact rejection for motion, blinks, and disconnected electrodes.
-- More controlled Twitter/X candidate retrieval.
-- Multi-user auth and secure profile isolation.
-- Better operator console for deterministic live judging demos.
-
