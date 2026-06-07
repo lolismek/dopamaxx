@@ -1170,10 +1170,20 @@
     const channels=frame.samples.channels||[];
     const vals=labels.map((_,idx)=>recentRMS(channels[idx]||[]));
     const finite=vals.filter(Number.isFinite);
-    const scale=robustScale(finite);
-    const norm=vals.map(v=>Number.isFinite(v)?Math.max(-1,Math.min(1,v/scale)):0);
+    // Normalize as deviation from the cross-channel mean so spatial variation
+    // is visible even when all channels share similar absolute power
+    // (pure sine wave simulator, or well-connected real cap).
+    const mean=finite.length?finite.reduce((a,b)=>a+b,0)/finite.length:0;
+    const devs=vals.map(v=>Number.isFinite(v)?v-mean:0);
+    const sortedAbs=devs.map(Math.abs).sort((a,b)=>a-b);
+    const devScale=Math.max(
+      sortedAbs.length?sortedAbs[Math.min(sortedAbs.length-1,Math.floor(sortedAbs.length*0.85))]:0,
+      mean*0.06,   // minimum scale = 6 % of mean (prevents noise floor blow-up)
+      1e-9
+    );
+    const norm=devs.map(d=>Math.max(-1,Math.min(1,d/devScale)));
     if(!topoSmoothed||topoSmoothed.length!==norm.length) topoSmoothed=norm.slice();
-    else topoSmoothed=topoSmoothed.map((old,i)=>old*0.82+norm[i]*0.18);
+    else topoSmoothed=topoSmoothed.map((old,i)=>old*0.80+norm[i]*0.20);
 
     const ctx=canvas.getContext('2d');
     ctx.clearRect(0,0,size,size);
@@ -1278,7 +1288,7 @@
       ctx.fillStyle='#C4C0B8';ctx.fillText(l,px,py-10*dpr);
     });
     ctx.restore();
-    document.getElementById('topoScale').textContent=`scale ${fmt(scale,1)}`;
+    document.getElementById('topoScale').textContent=`μ ${fmt(mean,2)} ±${fmt(devScale,2)}`;
   }
 
   // ─── ANIMATION LOOP ───────────────────────────────────────────────────────
