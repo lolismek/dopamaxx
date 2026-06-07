@@ -63,21 +63,21 @@ function render(s) {
   }
 }
 
-chrome.runtime.sendMessage({ type: "get_status" }, (s) => { if (s) render(s); });
-chrome.runtime.onMessage.addListener((msg) => { if (msg.type === "status_update") render(msg); });
+sendRuntimeMessage({ type: "get_status" }, (s) => { if (s) render(s); });
+chrome.runtime.onMessage.addListener((msg) => { if (msg?.type === "status_update") render(msg); });
 
 demoToggle.addEventListener("change", () => {
-  chrome.runtime.sendMessage({ type: "set_demo_mode", enabled: demoToggle.checked }, (s) => { if (s) render(s); });
+  sendRuntimeMessage({ type: "set_demo_mode", enabled: demoToggle.checked }, (s) => { if (s) render(s); });
 });
 
 switchBtn.addEventListener("click", () => {
-  chrome.runtime.sendMessage({ type: "demo_toggle_mode" }, (s) => { if (s) render(s); });
+  sendRuntimeMessage({ type: "demo_toggle_mode" }, (s) => { if (s) render(s); });
 });
 
 microdoseBtn.addEventListener("click", () => {
   microdoseBtn.disabled = true;
   microdoseStatus.textContent = "Starting autoscroll";
-  chrome.runtime.sendMessage({ type: "start_microdose" }, (response) => {
+  sendRuntimeMessage({ type: "start_microdose" }, (response) => {
     microdoseBtn.disabled = false;
     if (response?.status) render(response.status);
     if (!response?.ok) microdoseStatus.textContent = response?.error || "Start failed";
@@ -85,11 +85,22 @@ microdoseBtn.addEventListener("click", () => {
 });
 
 feedBtn.addEventListener("click", () => {
-  chrome.runtime.sendMessage({ type: "open_microdose_feed" }, (response) => {
+  sendRuntimeMessage({ type: "open_microdose_feed" }, (response) => {
     if (!response?.ok) microdoseStatus.textContent = response?.error || "Open failed";
   });
 });
 
-chrome.runtime.sendMessage({ type: "poll_microdose_feed" }, (response) => {
+sendRuntimeMessage({ type: "poll_microdose_feed" }, (response) => {
   if (response?.status) render(response.status);
 });
+
+function sendRuntimeMessage(message, onResponse) {
+  chrome.runtime.sendMessage(message, (response) => {
+    if (chrome.runtime.lastError) {
+      microdoseBtn.disabled = false;
+      microdoseStatus.textContent = chrome.runtime.lastError.message || "Extension unavailable";
+      return;
+    }
+    onResponse(response);
+  });
+}

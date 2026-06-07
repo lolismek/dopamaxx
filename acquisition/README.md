@@ -65,6 +65,9 @@ python -m acquisition serve --port COM9 --bridge-path C:\path\to\dsi2lsl.exe --h
 
 Another computer can subscribe to:
 
+- `ws://<capture-ip>:8765/stream/eeg` for derived JSON frames with
+  `inference.reward_score` and `inference.focus_score`; use this for the Chrome
+  extension.
 - `ws://<capture-ip>:8765/stream/raw` for binary float chunks.
 - `ws://<capture-ip>:8765/stream/raw-json` for easier debugging at lower throughput.
 - `http://<capture-ip>:8765/stream/raw-info` for protocol metadata.

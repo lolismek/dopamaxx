@@ -29,15 +29,17 @@ configure the Supabase endpoint from the extension service worker console:
 ```js
 chrome.storage.local.set({
   lockedOutCaptureConfig: {
-    supabaseFunctionUrl: "https://<project-ref>.supabase.co/functions/v1/capture-post",
-    supabaseAnonKey: "<supabase-publishable-key>",
+    supabaseFunctionUrl: "https://kbnbpangliwqthtjpgxm.supabase.co/functions/v1/capture-post",
+    supabaseAnonKey: "",
     userId: "demo_user",
     eegWsUrl: "ws://10.216.66.247:8765/stream/eeg"
   }
 });
 ```
 
-The extension never stores the OpenAI key or Supabase service-role key.
+The anon key can stay empty for the deployed `dopamaxx` function because
+`verify_jwt = false`. The extension never stores the OpenAI key, database
+password, or Supabase service-role key.
 `eegWsUrl` should point at the acquisition service's derived EEG stream, not
 the raw sample stream. The derived stream is what includes `reward_score` and
 `focus_score`.

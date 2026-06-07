@@ -35,7 +35,7 @@ function hideLockedInBanner() {
 }
 
 chrome.runtime.onMessage.addListener((msg) => {
-  if (msg.type !== "mode_change") return;
+  if (!msg || msg.type !== "mode_change") return;
   if (msg.mode === "locked_in") showLockedInBanner();
   else hideLockedInBanner();
 });

@@ -48,7 +48,7 @@ let state = {
 
 // ── WebSocket ──────────────────────────────────────────────────────────────
 
-const DEFAULT_EEG_WS_URL = "ws://127.0.0.1:8000/stream/eeg";
+const DEFAULT_EEG_WS_URL = "ws://10.216.66.247:8765/stream/eeg";
 const WS_RETRY_MS = 3000;
 const EEG_FRAME_TTL_MS = 30000;
 const EEG_RECENT_GRACE_MS = 2000;
@@ -137,8 +137,9 @@ async function loadEegWsUrl() {
     LOCKED_OUT_CAPTURE_CONFIG_STORAGE_KEY,
   ]);
   const lockedOutConfig = stored[LOCKED_OUT_CAPTURE_CONFIG_STORAGE_KEY] || {};
-  return normalizeEegWsUrl(stored[EEG_WS_STORAGE_KEY]) ||
-    normalizeEegWsUrl(lockedOutConfig.eegWsUrl) ||
+  const storedUrl = normalizeEegWsUrl(stored[EEG_WS_STORAGE_KEY]);
+  const configuredUrl = normalizeEegWsUrl(lockedOutConfig.eegWsUrl);
+  return firstNonLocalSimulatorEegUrl(storedUrl, configuredUrl) ||
     DEFAULT_EEG_WS_URL;
 }
 
@@ -187,6 +188,25 @@ function normalizeEegWsUrl(value) {
     return url.toString();
   } catch {
     return null;
+  }
+}
+
+function firstNonLocalSimulatorEegUrl(...urls) {
+  for (const url of urls) {
+    if (!url || isLocalSimulatorEegUrl(url)) continue;
+    return url;
+  }
+  return null;
+}
+
+function isLocalSimulatorEegUrl(value) {
+  try {
+    const url = new URL(value);
+    return (url.hostname === "127.0.0.1" || url.hostname === "localhost" || url.hostname === "[::1]") &&
+      url.port === "8000" &&
+      url.pathname === "/stream/eeg";
+  } catch {
+    return false;
   }
 }
 
@@ -455,7 +475,7 @@ async function refreshMicrodoseRun(runId) {
 async function pollMicrodoseFeed({ openWhenReady, runId = state.microdoseRunId }) {
   const items = await fetchMicrodoseItems(runId);
   state.microdoseReadyCount = items.length;
-  state.microdoseLastError = null;
+  if (items.length > 0) state.microdoseLastError = null;
 
   const readyRunId = runId ?? items[0]?.run_id ?? state.microdoseRunId;
   const done = ["completed", "cancelled", "failed"].includes(state.microdoseRunStatus);
@@ -646,6 +666,8 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 // ── Demo mode toggle (called from popup) ──────────────────────────────────
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (!msg || typeof msg !== "object") return undefined;
+
   if (msg.type === "get_status") {
     sendResponse(getStatus());
     return true;
