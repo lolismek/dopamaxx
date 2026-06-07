@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DopaMAXX Microdose Feed</title>
+  <style>
+    :root {
+      --bg: #0b0d12;
+      --panel: #141821;
+      --panel-2: #1b2130;
+      --line: #283142;
+      --text: #f4f7fb;
+      --muted: #8a94a7;
+      --faint: #5d6677;
+      --green: #22c55e;
+      --blue: #60a5fa;
+      --orange: #f59e0b;
+      --red: #ef4444;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: var(--panel-2);
+      color: var(--text);
+      cursor: pointer;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 650;
+      height: 34px;
+      padding: 0 12px;
+    }
+
+    button.primary {
+      border-color: rgba(34, 197, 94, 0.48);
+      background: rgba(34, 197, 94, 0.13);
+      color: var(--green);
+    }
+
+    button:disabled {
+      cursor: default;
+      opacity: 0.55;
+    }
+
+    .shell {
+      width: min(760px, calc(100vw - 28px));
+      margin: 0 auto;
+      padding: 18px 0 44px;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 0 12px;
+      background: rgba(11, 13, 18, 0.94);
+      border-bottom: 1px solid var(--line);
+      backdrop-filter: blur(10px);
+    }
+
+    .brand {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+
+    .wordmark {
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .wordmark em {
+      color: var(--green);
+      font-style: normal;
+    }
+
+    .run {
+      color: var(--muted);
+      font-size: 12px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .status {
+      flex: none;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 7px 10px;
+      color: var(--orange);
+      font-size: 12px;
+      font-weight: 750;
+      text-transform: uppercase;
+    }
+
+    .status.ready {
+      color: var(--green);
+    }
+
+    .status.error {
+      color: var(--red);
+    }
+
+    .feed {
+      display: grid;
+      gap: 14px;
+      padding-top: 16px;
+    }
+
+    .post {
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    .post-head,
+    .post-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .rank {
+      color: var(--blue);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .score {
+      color: var(--green);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .embed {
+      min-height: 120px;
+    }
+
+    .embed blockquote {
+      margin: 0;
+    }
+
+    .embed a {
+      color: var(--blue);
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+    }
+
+    .author {
+      min-width: 0;
+      color: var(--muted);
+      font-size: 12px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .empty {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--muted);
+      padding: 28px 16px;
+      text-align: center;
+    }
+
+    @media (max-width: 560px) {
+      .shell {
+        width: min(100vw - 20px, 760px);
+        padding-top: 10px;
+      }
+
+      .topbar {
+        align-items: flex-start;
+      }
+
+      .status {
+        max-width: 44vw;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="wordmark">DOPA<em>MAXX</em></div>
+        <div class="run" id="runLabel">microdose feed</div>
+      </div>
+      <div class="status" id="status">Loading</div>
+    </header>
+    <section class="feed" id="feed"></section>
+  </main>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const userId = params.get("user_id") || "demo-user";
+    const sessionId = params.get("session_id") || "demo-session";
+    const runId = params.get("run_id") || "";
+    const limit = params.get("limit") || "20";
+
+    const feedEl = document.getElementById("feed");
+    const statusEl = document.getElementById("status");
+    const runLabelEl = document.getElementById("runLabel");
+
+    runLabelEl.textContent = runId ? `run ${runId.slice(0, 8)}` : `${userId} / ${sessionId}`;
+    loadFeed();
+
+    async function loadFeed() {
+      try {
+        setStatus("Loading");
+        const url = new URL("/feed/microdose", window.location.origin);
+        url.searchParams.set("user_id", userId);
+        url.searchParams.set("session_id", sessionId);
+        url.searchParams.set("limit", limit);
+        if (runId) url.searchParams.set("run_id", runId);
+
+        const response = await fetch(url.toString());
+        if (!response.ok) throw new Error(`feed failed: ${response.status}`);
+
+        const payload = await response.json();
+        const items = payload.items || [];
+        renderFeed(items);
+        setStatus(`${items.length} Ready`, items.length ? "ready" : "");
+        await renderXEmbeds(items);
+      } catch (error) {
+        setStatus("Error", "error");
+        renderEmpty(String(error));
+      }
+    }
+
+    function renderFeed(items) {
+      feedEl.innerHTML = "";
+      if (!items.length) {
+        renderEmpty("no ready posts");
+        return;
+      }
+
+      for (const item of items) {
+        const article = document.createElement("article");
+        article.className = "post";
+
+        const head = document.createElement("div");
+        head.className = "post-head";
+        head.appendChild(textNode("span", "rank", `#${item.rank}`));
+        head.appendChild(textNode("span", "score", scoreText(item.predicted_reward)));
+
+        const embed = document.createElement("div");
+        embed.className = "embed";
+        embed.dataset.queueId = item.queue_id;
+        embed.appendChild(tweetFallback(item));
+
+        const foot = document.createElement("div");
+        foot.className = "post-foot";
+        foot.appendChild(textNode("span", "author", item.author ? `@${item.author}` : item.post_id));
+
+        const actions = document.createElement("div");
+        actions.className = "actions";
+        actions.appendChild(statusButton(item.queue_id, "consumed", "Done", true));
+        actions.appendChild(statusButton(item.queue_id, "dismissed", "Dismiss", false));
+        foot.appendChild(actions);
+
+        article.appendChild(head);
+        article.appendChild(embed);
+        article.appendChild(foot);
+        feedEl.appendChild(article);
+      }
+    }
+
+    function tweetFallback(item) {
+      if (!item.url) {
+        return textNode("div", "", item.text || "(no post URL)");
+      }
+
+      const link = document.createElement("a");
+      link.className = "fallback";
+      link.href = item.url;
+      link.textContent = item.text || item.url;
+      link.target = "_blank";
+      link.rel = "noreferrer";
+      return link;
+    }
+
+    function renderEmpty(message) {
+      feedEl.innerHTML = "";
+      feedEl.appendChild(textNode("div", "empty", message));
+    }
+
+    function textNode(tag, className, text) {
+      const node = document.createElement(tag);
+      if (className) node.className = className;
+      node.textContent = text;
+      return node;
+    }
+
+    function scoreText(score) {
+      return Number.isFinite(score) ? `score ${score.toFixed(3)}` : "score n/a";
+    }
+
+    function setStatus(text, state = "") {
+      statusEl.textContent = text;
+      statusEl.className = state ? `status ${state}` : "status";
+    }
+
+    async function markItem(queueId, status) {
+      const response = await fetch(`/feed/microdose/${encodeURIComponent(queueId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (!response.ok) throw new Error(`update failed: ${response.status}`);
+    }
+
+    function statusButton(queueId, status, label, primary) {
+      const button = document.createElement("button");
+      button.textContent = label;
+      if (primary) button.className = "primary";
+      button.addEventListener("click", async () => {
+        button.disabled = true;
+        try {
+          await markItem(queueId, status);
+          await loadFeed();
+        } catch (error) {
+          button.disabled = false;
+          setStatus("Error", "error");
+        }
+      });
+      return button;
+    }
+
+    async function renderXEmbeds(items) {
+      const twttr = await loadXWidgets();
+      if (!twttr?.widgets?.createTweet) return;
+
+      const tasks = items.map(async (item) => {
+        if (!item.post_id) return;
+
+        const embed = document.querySelector(`.embed[data-queue-id="${cssEscape(item.queue_id)}"]`);
+        if (!embed) return;
+
+        const target = document.createElement("div");
+        target.className = "x-render";
+        embed.appendChild(target);
+
+        try {
+          const rendered = await withTimeout(
+            twttr.widgets.createTweet(item.post_id, target, {
+              align: "center",
+              conversation: "none",
+              dnt: true,
+              theme: "dark",
+            }),
+            10000
+          );
+          if (!rendered) {
+            target.remove();
+          } else {
+            embed.querySelector(".fallback")?.remove();
+          }
+        } catch {
+          target.remove();
+        }
+      });
+
+      await Promise.allSettled(tasks);
+    }
+
+    function withTimeout(promise, timeoutMs) {
+      return Promise.race([
+        promise,
+        new Promise((resolve) => setTimeout(() => resolve(null), timeoutMs)),
+      ]);
+    }
+
+    function cssEscape(value) {
+      if (window.CSS?.escape) return window.CSS.escape(value);
+      return String(value).replace(/["\\]/g, "\\$&");
+    }
+
+    function loadXWidgets() {
+      return new Promise((resolve) => {
+        if (window.twttr?.widgets?.createTweet) {
+          resolve(window.twttr);
+          return;
+        }
+
+        window.twttr = window.twttr || { _e: [], ready(callback) { this._e.push(callback); } };
+        window.twttr.ready(() => resolve(window.twttr));
+
+        let script = document.querySelector("script[data-x-widgets]");
+        if (!script) {
+          script = document.createElement("script");
+          script.async = true;
+          script.charset = "utf-8";
+          script.dataset.xWidgets = "true";
+          script.src = "https://platform.twitter.com/widgets.js";
+          script.addEventListener("error", () => resolve(null), { once: true });
+          document.body.appendChild(script);
+        }
+
+        setTimeout(() => resolve(window.twttr?.widgets ? window.twttr : null), 8000);
+      });
+    }
+  </script>
+</body>
+</html>

@@ -1,10 +1,11 @@
 const feedEl = document.getElementById("feed");
 const statusEl = document.getElementById("status");
+const runId = new URLSearchParams(window.location.search).get("run_id");
 
 loadFeed();
 
 async function loadFeed() {
-  const response = await sendMessage({ type: "get_microdose_feed" });
+  const response = await sendMessage({ type: "get_microdose_feed", runId });
   if (!response.ok) {
     statusEl.textContent = "ERROR";
     renderEmpty(response.error || "feed unavailable");

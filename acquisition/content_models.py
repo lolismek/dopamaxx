@@ -48,6 +48,14 @@ class ReactionIngestRequest(BaseModel):
         return "neutral"
 
 
+class ForYouCandidatesIngestRequest(BaseModel):
+    user_id: str = Field(min_length=1)
+    session_id: str = Field(min_length=1)
+    posts: list[PostCandidate] = Field(default_factory=list, max_length=100)
+    observed_at: str | None = None
+    source_url: str | None = None
+
+
 class PostReaction(BaseModel):
     reaction_id: str = Field(default_factory=lambda: str(uuid4()))
     user_id: str

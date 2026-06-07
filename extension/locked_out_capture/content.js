@@ -6,8 +6,11 @@
   const SCROLL_IDLE_MS = 300;
   const MIN_DWELL_MS = 1200;
   const CAPTURE_MESSAGE = "locked_out_capture_post";
+  const FOR_YOU_CANDIDATES_MESSAGE = "for_you_candidates";
   const STATUS_MESSAGE = "get_status";
   const MODE_CHANGE_MESSAGE = "mode_change";
+  const FOR_YOU_SCAN_INTERVAL_MS = 1500;
+  const FOR_YOU_BATCH_LIMIT = 30;
   const LOG_PREFIX = "[DopaMAXX locked-out]";
 
   if (typeof globalThis.__dopamaxxLockedOutCaptureStop === "function") {
@@ -21,9 +24,13 @@
   let currentWinner = null;
   let currentWinnerSinceMs = 0;
   let scanTimer = null;
+  let forYouScanTimer = null;
   let scanQueued = false;
+  let forYouScanQueued = false;
   let lastScrollAtMs = 0;
   const submittedPostIds = new Set();
+  const submittedForYouPostIds = new Set();
+  const inflightForYouPostIds = new Set();
 
   function isSupportedHost() {
     const host = window.location.hostname.replace(/^www\./, "");
@@ -59,6 +66,23 @@
     currentWinnerSinceMs = 0;
   }
 
+  function startForYouBuffering() {
+    if (forYouScanTimer) return;
+    forYouScanTimer = window.setInterval(queueForYouScan, FOR_YOU_SCAN_INTERVAL_MS);
+    window.addEventListener("scroll", queueForYouScan, { passive: true });
+    window.addEventListener("resize", queueForYouScan, { passive: true });
+    queueForYouScan();
+  }
+
+  function stopForYouBuffering() {
+    if (forYouScanTimer) {
+      window.clearInterval(forYouScanTimer);
+      forYouScanTimer = null;
+    }
+    window.removeEventListener("scroll", queueForYouScan);
+    window.removeEventListener("resize", queueForYouScan);
+  }
+
   function handleScroll() {
     lastScrollAtMs = performance.now();
     currentWinner = null;
@@ -72,6 +96,15 @@
     window.requestAnimationFrame(() => {
       scanQueued = false;
       scan();
+    });
+  }
+
+  function queueForYouScan() {
+    if (!shouldCollectForYouCandidates() || forYouScanQueued) return;
+    forYouScanQueued = true;
+    window.requestAnimationFrame(() => {
+      forYouScanQueued = false;
+      scanForYouCandidates();
     });
   }
 
@@ -168,6 +201,44 @@
     }
 
     return candidates;
+  }
+
+  function scanForYouCandidates() {
+    if (!shouldCollectForYouCandidates()) return;
+
+    const candidates = collectTweetCandidates()
+      .sort((a, b) => a.rect.top - b.rect.top)
+      .map((candidate) => candidate.post)
+      .filter((post) => {
+        const postId = post && post.platform_post_id;
+        return postId
+          && !submittedForYouPostIds.has(postId)
+          && !inflightForYouPostIds.has(postId);
+      })
+      .slice(0, FOR_YOU_BATCH_LIMIT);
+
+    if (!candidates.length) return;
+    submitForYouCandidates(candidates);
+  }
+
+  function shouldCollectForYouCandidates() {
+    if (!isSupportedHost()) return false;
+    if (window.location.pathname !== "/home") return false;
+    return isForYouTabSelected();
+  }
+
+  function isForYouTabSelected() {
+    const tabs = Array.from(
+      document.querySelectorAll('[role="tab"][aria-selected="true"], a[aria-selected="true"]')
+    );
+    if (!tabs.length) return true;
+
+    const selectedText = tabs
+      .map((tab) => cleanText(tab.innerText || tab.getAttribute("aria-label") || "").toLowerCase())
+      .join(" ");
+    if (selectedText.includes("following")) return false;
+    if (selectedText.includes("for you")) return true;
+    return true;
   }
 
   function extractPost(article) {
@@ -320,6 +391,46 @@
     }
   }
 
+  function submitForYouCandidates(posts) {
+    const observedAt = new Date().toISOString();
+    for (const post of posts) inflightForYouPostIds.add(post.platform_post_id);
+
+    try {
+      chrome.runtime.sendMessage(
+        {
+          type: FOR_YOU_CANDIDATES_MESSAGE,
+          posts,
+          observed_at: observedAt,
+          source_url: window.location.href,
+        },
+        (response) => {
+          for (const post of posts) inflightForYouPostIds.delete(post.platform_post_id);
+          if (chrome.runtime.lastError || !response || !response.ok) {
+            console.warn(`${LOG_PREFIX} for-you-candidates-rejected`, {
+              count: posts.length,
+              error: chrome.runtime.lastError
+                ? chrome.runtime.lastError.message
+                : response && response.error,
+            });
+            return;
+          }
+
+          for (const post of posts) submittedForYouPostIds.add(post.platform_post_id);
+          console.debug(`${LOG_PREFIX} for-you-candidates-buffered`, {
+            count: posts.length,
+            buffered_count: response.buffered_count,
+          });
+        }
+      );
+    } catch (error) {
+      for (const post of posts) inflightForYouPostIds.delete(post.platform_post_id);
+      console.warn(`${LOG_PREFIX} for-you-candidates-error`, {
+        count: posts.length,
+        error: error && error.message ? error.message : String(error),
+      });
+    }
+  }
+
   function logCandidateDetected(winner, nowMs) {
     const msSinceScroll = lastScrollAtMs > 0 ? Math.round(nowMs - lastScrollAtMs) : null;
     console.debug(`${LOG_PREFIX} centered-post-detected`, {
@@ -351,7 +462,10 @@
     };
   }
 
-  globalThis.__dopamaxxLockedOutCaptureStop = stop;
+  globalThis.__dopamaxxLockedOutCaptureStop = () => {
+    stop();
+    stopForYouBuffering();
+  };
 
   chrome.runtime.onMessage.addListener((msg) => {
     if (!msg || msg.type !== MODE_CHANGE_MESSAGE) return;
@@ -367,5 +481,6 @@
     if (chrome.runtime.lastError) return;
     currentMode = status && status.mode ? status.mode : MODE_LOCKED_OUT;
     if (shouldCapture()) start();
+    startForYouBuffering();
   });
 })();

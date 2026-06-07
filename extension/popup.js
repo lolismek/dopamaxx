@@ -50,10 +50,14 @@ function render(s) {
   microdoseCount.textContent = `${readyCount}/${targetCount}`;
   if (microdose.lastError) {
     microdoseStatus.textContent = microdose.lastError;
+  } else if (microdose.forYouLastError) {
+    microdoseStatus.textContent = microdose.forYouLastError;
   } else if (readyCount >= targetCount) {
     microdoseStatus.textContent = "Feed ready";
   } else if (microdose.runId) {
     microdoseStatus.textContent = `Run ${microdose.runId.slice(0, 8)} ${microdose.runStatus || "running"}`;
+  } else if (microdose.forYouCandidateCount) {
+    microdoseStatus.textContent = `For You buffered ${microdose.forYouCandidateCount}`;
   } else {
     microdoseStatus.textContent = "Manual demo trigger";
   }

@@ -21,11 +21,13 @@ from acquisition.config import BridgeConfigError, require_port, resolve_bridge_p
 from acquisition.content_models import (
     AutoscrollCancelRequest,
     AutoscrollStartRequest,
+    ForYouCandidatesIngestRequest,
     PostReaction,
     QueueStatusUpdateRequest,
     ReactionIngestRequest,
 )
 from acquisition.content_store import ContentStore, content_store_from_env
+from acquisition.for_you_source import ForYouCandidateSource
 from acquisition.frames import FrameMetadata, build_eeg_frame, status_frame
 from acquisition.lsl import LSLReader, health_check_inlet, wait_for_stream_inlet
 from acquisition.raw_stream import encode_raw_frame, hello_message
@@ -260,15 +262,21 @@ def create_app(
 
     store = content_store or content_store_from_env()
     post_embedder = embedder or embedding_provider_from_env()
+    live_candidate_source = candidate_source or twitter_mcp_from_env()
+    for_you_candidates = ForYouCandidateSource(fallback=live_candidate_source)
     autoscroll = AutoscrollService(
         store=store,
-        candidate_source=candidate_source or twitter_mcp_from_env(),
+        candidate_source=for_you_candidates,
         embedder=post_embedder,
     )
 
     @app.get("/", response_class=HTMLResponse)
     def dashboard() -> str:
         return _dashboard_html()
+
+    @app.get("/microdose/feed", response_class=HTMLResponse)
+    def microdose_feed_page() -> str:
+        return _microdose_feed_html()
 
     @app.get("/health")
     def health() -> dict:
@@ -312,6 +320,24 @@ def create_app(
         stored = await store.insert_reaction(reaction)
         return {"reaction": stored.model_dump(mode="json")}
 
+    @app.post("/feed/for-you/candidates")
+    async def ingest_for_you_candidates(request: ForYouCandidatesIngestRequest) -> dict:
+        accepted_count = await for_you_candidates.ingest(
+            user_id=request.user_id,
+            session_id=request.session_id,
+            posts=request.posts,
+            observed_at=request.observed_at,
+        )
+        buffered_count = await for_you_candidates.count(
+            user_id=request.user_id,
+            session_id=request.session_id,
+        )
+        return {
+            "ok": True,
+            "accepted_count": accepted_count,
+            "buffered_count": buffered_count,
+        }
+
     @app.post("/agent/autoscroll/start")
     async def start_autoscroll(request: AutoscrollStartRequest) -> dict:
         try:
@@ -335,8 +361,18 @@ def create_app(
         return {"run": run.model_dump(mode="json")}
 
     @app.get("/feed/microdose")
-    async def microdose_feed(user_id: str, session_id: str, limit: int = 100) -> dict:
-        items = await store.list_ready_queue(user_id=user_id, session_id=session_id, limit=limit)
+    async def microdose_feed(
+        user_id: str,
+        session_id: str,
+        limit: int = 100,
+        run_id: str | None = None,
+    ) -> dict:
+        items = await store.list_ready_queue(
+            user_id=user_id,
+            session_id=session_id,
+            limit=limit,
+            run_id=run_id,
+        )
         return {"items": [item.model_dump(mode="json") for item in items]}
 
     @app.patch("/feed/microdose/{queue_id}")
@@ -464,5 +500,13 @@ def _dashboard_html() -> str:
     return (
         resources.files("acquisition")
         .joinpath("static", "dashboard.html")
+        .read_text(encoding="utf-8")
+    )
+
+
+def _microdose_feed_html() -> str:
+    return (
+        resources.files("acquisition")
+        .joinpath("static", "microdose_feed.html")
         .read_text(encoding="utf-8")
     )

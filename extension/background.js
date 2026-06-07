@@ -1,13 +1,16 @@
 // Modes
 const MODE_LOCKED_IN = "locked_in";
 const MODE_LOCKED_OUT = "locked_out";
-const BACKEND_URL = "http://localhost:8000";
+const BACKEND_URL = "http://127.0.0.1:8000";
 const MICRODOSE_USER_ID = "demo-user";
 const MICRODOSE_SESSION_ID = "demo-session";
 const MICRODOSE_TARGET_COUNT = 20;
 const MICRODOSE_POLL_ALARM = "microdose-poll";
 const EEG_WS_STORAGE_KEY = "dopamaxxEegWsUrl";
 const LOCKED_OUT_CAPTURE_CONFIG_STORAGE_KEY = "lockedOutCaptureConfig";
+const MICRODOSE_READY_TIMEOUT_MS = 60000;
+const MICRODOSE_READY_POLL_MS = 1500;
+const FOR_YOU_CANDIDATES_MESSAGE = "for_you_candidates";
 
 const DISTRACTING_SITES = [
   "twitter.com", "x.com",
@@ -37,11 +40,13 @@ let state = {
   microdoseRunStatus: null,
   microdoseLastOpenedRunId: null,
   microdoseLastError: null,
+  forYouCandidateCount: 0,
+  forYouLastError: null,
 };
 
 // ── WebSocket ──────────────────────────────────────────────────────────────
 
-const DEFAULT_EEG_WS_URL = "ws://10.216.66.247:8765/stream/eeg";
+const DEFAULT_EEG_WS_URL = "ws://127.0.0.1:8000/stream/eeg";
 const WS_RETRY_MS = 3000;
 const EEG_FRAME_TTL_MS = 30000;
 const EEG_RECENT_GRACE_MS = 2000;
@@ -350,7 +355,10 @@ async function startMicrodoseRun() {
       session_id: MICRODOSE_SESSION_ID,
       target_count: MICRODOSE_TARGET_COUNT,
       timeout_s: 45,
-      query_context: { trigger: "chrome_extension_demo" },
+      query_context: {
+        trigger: "chrome_extension_demo",
+        candidate_source: "x_for_you",
+      },
     }),
   });
 
@@ -364,35 +372,80 @@ async function startMicrodoseRun() {
   state.microdoseRunStatus = payload.run?.status ?? "running";
   state.microdoseReadyCount = 0;
   broadcastStatus();
-  pollMicrodoseFeed({ openWhenReady: false }).catch(() => {});
+
+  if (state.microdoseRunId) {
+    await waitForMicrodoseReady(state.microdoseRunId);
+  } else {
+    await pollMicrodoseFeed({ openWhenReady: true });
+  }
+
   return getStatus();
 }
 
-async function pollMicrodoseFeed({ openWhenReady }) {
-  const items = await fetchMicrodoseItems();
+async function waitForMicrodoseReady(runId) {
+  const deadline = Date.now() + MICRODOSE_READY_TIMEOUT_MS;
+  let result = { status: getStatus(), items: [] };
+
+  while (Date.now() < deadline) {
+    await refreshMicrodoseRun(runId);
+    result = await pollMicrodoseFeed({ openWhenReady: true, runId });
+
+    const done = ["completed", "cancelled", "failed"].includes(state.microdoseRunStatus);
+    if (result.items.length >= MICRODOSE_TARGET_COUNT || (done && result.items.length > 0)) {
+      return result;
+    }
+
+    if (done) {
+      return result;
+    }
+
+    await sleep(MICRODOSE_READY_POLL_MS);
+  }
+
+  state.microdoseLastError = "microdose feed timed out";
+  broadcastStatus();
+  return result;
+}
+
+async function refreshMicrodoseRun(runId) {
+  const response = await fetch(`${BACKEND_URL}/agent/autoscroll/runs/${encodeURIComponent(runId)}`);
+  if (!response.ok) {
+    throw new Error(`autoscroll run poll failed: ${response.status}`);
+  }
+
+  const payload = await response.json();
+  const run = payload.run ?? {};
+  state.microdoseRunId = run.run_id ?? runId;
+  state.microdoseRunStatus = run.status ?? state.microdoseRunStatus;
+  if (run.error) state.microdoseLastError = run.error;
+  broadcastStatus();
+  return run;
+}
+
+async function pollMicrodoseFeed({ openWhenReady, runId = state.microdoseRunId }) {
+  const items = await fetchMicrodoseItems(runId);
   state.microdoseReadyCount = items.length;
   state.microdoseLastError = null;
 
-  const runId = items[0]?.run_id ?? state.microdoseRunId;
-  if (
-    openWhenReady &&
-    items.length >= MICRODOSE_TARGET_COUNT &&
-    runId &&
-    state.microdoseLastOpenedRunId !== runId
-  ) {
-    state.microdoseLastOpenedRunId = runId;
-    await openMicrodoseFeed();
+  const readyRunId = runId ?? items[0]?.run_id ?? state.microdoseRunId;
+  const done = ["completed", "cancelled", "failed"].includes(state.microdoseRunStatus);
+  const readyToOpen = items.length >= MICRODOSE_TARGET_COUNT || (done && items.length > 0);
+
+  if (openWhenReady && readyToOpen && readyRunId && state.microdoseLastOpenedRunId !== readyRunId) {
+    state.microdoseLastOpenedRunId = readyRunId;
+    await openMicrodoseFeed(readyRunId);
   }
 
   broadcastStatus();
   return { status: getStatus(), items };
 }
 
-async function fetchMicrodoseItems() {
+async function fetchMicrodoseItems(runId = state.microdoseRunId) {
   const url = new URL(`${BACKEND_URL}/feed/microdose`);
   url.searchParams.set("user_id", MICRODOSE_USER_ID);
   url.searchParams.set("session_id", MICRODOSE_SESSION_ID);
   url.searchParams.set("limit", String(MICRODOSE_TARGET_COUNT));
+  if (runId) url.searchParams.set("run_id", runId);
 
   const response = await fetch(url.toString());
   if (!response.ok) {
@@ -414,14 +467,70 @@ async function updateMicrodoseItem(queueId, status) {
   return response.json();
 }
 
-async function openMicrodoseFeed() {
+async function ingestForYouCandidates(posts, sourceUrl, observedAt) {
+  const response = await fetch(`${BACKEND_URL}/feed/for-you/candidates`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      user_id: MICRODOSE_USER_ID,
+      session_id: MICRODOSE_SESSION_ID,
+      observed_at: observedAt,
+      source_url: sourceUrl,
+      posts: posts.map(toPostCandidate).filter(Boolean),
+    }),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(`for-you candidate ingest failed: ${response.status} ${detail}`);
+  }
+
+  const payload = await response.json();
+  state.forYouCandidateCount = payload.buffered_count ?? state.forYouCandidateCount;
+  state.forYouLastError = null;
+  broadcastStatus();
+  return payload;
+}
+
+function toPostCandidate(post) {
+  const postId = post?.platform_post_id;
+  if (!postId) return null;
+
+  return {
+    post_id: String(postId),
+    text: post.text || "",
+    author: post.author_handle || post.author_name || null,
+    url: post.canonical_url || null,
+    media_urls: Array.isArray(post.media)
+      ? post.media.map((item) => item.src || item.poster).filter(Boolean)
+      : [],
+    source: "x_for_you_extension",
+    metadata: {
+      platform: post.platform || "x",
+      author_name: post.author_name || null,
+      raw_media: Array.isArray(post.media) ? post.media : [],
+    },
+  };
+}
+
+async function openMicrodoseFeed(runId = state.microdoseRunId) {
+  const url = new URL(`${BACKEND_URL}/microdose/feed`);
+  url.searchParams.set("user_id", MICRODOSE_USER_ID);
+  url.searchParams.set("session_id", MICRODOSE_SESSION_ID);
+  url.searchParams.set("limit", String(MICRODOSE_TARGET_COUNT));
+  if (runId) url.searchParams.set("run_id", runId);
+
   await chrome.windows.create({
-    url: chrome.runtime.getURL("feed.html"),
+    url: url.toString(),
     type: "popup",
     width: 520,
     height: 760,
     focused: true,
   });
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // ── Mode management ────────────────────────────────────────────────────────
@@ -534,8 +643,19 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     return true;
   }
 
+  if (msg.type === FOR_YOU_CANDIDATES_MESSAGE) {
+    ingestForYouCandidates(msg.posts || [], msg.source_url || null, msg.observed_at || null)
+      .then((payload) => sendResponse({ ok: true, ...payload }))
+      .catch((error) => {
+        state.forYouLastError = String(error);
+        broadcastStatus();
+        sendResponse({ ok: false, error: String(error) });
+      });
+    return true;
+  }
+
   if (msg.type === "poll_microdose_feed") {
-    pollMicrodoseFeed({ openWhenReady: false })
+    pollMicrodoseFeed({ openWhenReady: false, runId: msg.runId ?? state.microdoseRunId })
       .then((result) => sendResponse({ ok: true, ...result }))
       .catch((error) => {
         state.microdoseLastError = String(error);
@@ -546,14 +666,14 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 
   if (msg.type === "open_microdose_feed") {
-    openMicrodoseFeed()
+    openMicrodoseFeed(msg.runId ?? state.microdoseRunId)
       .then(() => sendResponse({ ok: true }))
       .catch((error) => sendResponse({ ok: false, error: String(error) }));
     return true;
   }
 
   if (msg.type === "get_microdose_feed") {
-    fetchMicrodoseItems()
+    fetchMicrodoseItems(msg.runId ?? state.microdoseRunId)
       .then((items) => sendResponse({ ok: true, items, status: getStatus() }))
       .catch((error) => sendResponse({ ok: false, error: String(error), items: [] }));
     return true;
@@ -598,6 +718,8 @@ function getStatus() {
       runId: state.microdoseRunId,
       runStatus: state.microdoseRunStatus,
       lastError: state.microdoseLastError,
+      forYouCandidateCount: state.forYouCandidateCount,
+      forYouLastError: state.forYouLastError,
     },
   };
 }

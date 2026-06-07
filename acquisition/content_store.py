@@ -36,7 +36,7 @@ class ContentStore(Protocol):
         """Persist ready feed items."""
 
     async def list_ready_queue(
-        self, user_id: str, session_id: str, limit: int = 100
+        self, user_id: str, session_id: str, limit: int = 100, run_id: str | None = None
     ) -> list[QueueItem]:
         """Return ready feed items in rank order."""
 
@@ -94,7 +94,7 @@ class InMemoryContentStore:
             return [item.model_copy(deep=True) for item in items]
 
     async def list_ready_queue(
-        self, user_id: str, session_id: str, limit: int = 100
+        self, user_id: str, session_id: str, limit: int = 100, run_id: str | None = None
     ) -> list[QueueItem]:
         async with self._lock:
             items = [
@@ -103,6 +103,7 @@ class InMemoryContentStore:
                 if item.user_id == user_id
                 and item.session_id == session_id
                 and item.status == "ready"
+                and (run_id is None or item.run_id == run_id)
             ]
             items.sort(key=lambda item: (item.rank, item.created_at))
             return [item.model_copy(deep=True) for item in items[:limit]]
@@ -192,19 +193,23 @@ class SupabaseContentStore:
         return [QueueItem.model_validate(row) for row in rows]
 
     async def list_ready_queue(
-        self, user_id: str, session_id: str, limit: int = 100
+        self, user_id: str, session_id: str, limit: int = 100, run_id: str | None = None
     ) -> list[QueueItem]:
+        params = {
+            "select": "*",
+            "user_id": f"eq.{user_id}",
+            "session_id": f"eq.{session_id}",
+            "status": "eq.ready",
+            "order": "rank.asc",
+            "limit": str(limit),
+        }
+        if run_id is not None:
+            params["run_id"] = f"eq.{run_id}"
+
         rows = await self._request(
             "GET",
             "microdose_queue",
-            params={
-                "select": "*",
-                "user_id": f"eq.{user_id}",
-                "session_id": f"eq.{session_id}",
-                "status": "eq.ready",
-                "order": "rank.asc",
-                "limit": str(limit),
-            },
+            params=params,
         )
         return [QueueItem.model_validate(row) for row in rows]
 
@@ -268,4 +273,3 @@ def finish_fields(status: str, **extra: Any) -> dict[str, Any]:
     fields = {"status": status, "finished_at": utc_now_iso()}
     fields.update(extra)
     return fields
-

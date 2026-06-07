@@ -191,6 +191,8 @@ class AutoscrollService:
         context.update(
             {
                 "agent_mode": "locked_in_manual_live_scroll",
+                "user_id": request.user_id,
+                "session_id": request.session_id,
                 "target_count": request.target_count,
                 "positive_examples": [reaction.text[:280] for reaction in hits[:8]],
                 "negative_examples": [reaction.text[:280] for reaction in misses[:5]],
