@@ -2,136 +2,103 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>DopaMAXX — Locked In</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <title>Locked In</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
       height: 100vh;
-      background: #0f1117;
-      color: #f1f5f9;
-      font-family: 'IBM Plex Mono', monospace;
+      background: #141414;
+      color: #f0ede8;
+      font-family: -apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
     }
 
-    .card {
-      text-align: center;
-      max-width: 400px;
-      padding: 0 32px;
-    }
-
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
+    .label {
       font-size: 10px;
       font-weight: 600;
-      letter-spacing: 0.14em;
+      letter-spacing: 0.22em;
       text-transform: uppercase;
-      color: #3b82f6;
-      background: rgba(59,130,246,0.1);
-      border: 1px solid rgba(59,130,246,0.25);
-      border-radius: 4px;
-      padding: 4px 11px;
-      margin-bottom: 28px;
-    }
-    .badge .dot {
-      width: 6px; height: 6px;
-      border-radius: 50%;
-      background: #3b82f6;
-      animation: pulse 1.8s ease-in-out infinite;
+      color: #6b6b6b;
+      margin-bottom: 20px;
     }
 
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50%       { opacity: 0.3; }
+    .heading {
+      font-size: 48px;
+      font-weight: 300;
+      letter-spacing: -0.01em;
+      color: #e8560a;
+      line-height: 1;
+      margin-bottom: 12px;
     }
 
-    .wordmark {
-      font-size: 36px;
-      font-weight: 700;
-      letter-spacing: 0.06em;
-      color: #fff;
-      margin-bottom: 6px;
-    }
-    .wordmark em { color: #22c55e; font-style: normal; }
-
-    .headline {
+    .sub {
       font-size: 13px;
-      font-weight: 500;
-      color: #64748b;
-      letter-spacing: 0.04em;
-      line-height: 1.6;
-      margin-bottom: 36px;
+      font-weight: 400;
+      color: #6b6b6b;
+      letter-spacing: 0.01em;
+      margin-bottom: 48px;
     }
-    .headline strong { color: #94a3b8; font-weight: 600; }
 
     .stats {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 8px;
-      max-width: 260px;
-      margin: 0 auto;
+      display: flex;
+      gap: 40px;
+      border-top: 1px solid #2a2a2a;
+      padding-top: 24px;
     }
 
-    .stat {
-      background: #161922;
-      border: 1px solid #252a3a;
-      border-radius: 8px;
-      padding: 10px 12px;
-      text-align: left;
-    }
+    .stat { text-align: center; }
+
     .stat-val {
-      font-size: 16px;
-      font-weight: 700;
-      color: #f1f5f9;
-      margin-bottom: 3px;
+      font-size: 20px;
+      font-weight: 500;
+      color: #f0ede8;
+      font-variant-numeric: tabular-nums;
+      margin-bottom: 5px;
     }
-    .stat-val.green { color: #22c55e; }
-    .stat-val.blue  { color: #3b82f6; }
-    .stat-label {
+    .stat-val.dim { color: #6b6b6b; font-weight: 300; }
+
+    .stat-lbl {
       font-size: 9px;
-      color: #475569;
-      letter-spacing: 0.1em;
+      font-weight: 600;
+      letter-spacing: 0.18em;
       text-transform: uppercase;
+      color: #6b6b6b;
     }
   </style>
 </head>
 <body>
-  <div class="card">
-    <div class="badge"><span class="dot"></span>LOCKED IN</div>
-    <div class="wordmark">DOPA<em>MAXX</em></div>
-    <p class="headline">
-      Your brain is working.<br />
-      <strong>Stay in the zone.</strong>
-    </p>
-    <div class="stats">
-      <div class="stat">
-        <div class="stat-val green" id="focusScore">—</div>
-        <div class="stat-label">Focus Score</div>
-      </div>
-      <div class="stat">
-        <div class="stat-val blue" id="modeTimer">--:--</div>
-        <div class="stat-label">Time Left</div>
-      </div>
+  <div class="label">DopaMAXX</div>
+  <div class="heading">Locked In</div>
+  <div class="sub">Stay in the zone.</div>
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-val dim" id="focusVal">—</div>
+      <div class="stat-lbl">Focus</div>
+    </div>
+    <div class="stat">
+      <div class="stat-val dim" id="timerVal">--:--</div>
+      <div class="stat-lbl">Time Left</div>
     </div>
   </div>
-
   <script>
-    // pull live focus score + timer from background
     chrome.runtime.sendMessage({ type: "get_status" }, (s) => {
       if (!s) return;
-      document.getElementById("focusScore").textContent =
-        s.focusScore != null ? s.focusScore.toFixed(2) : "—";
-      const sec = s.timerSeconds;
-      if (sec) {
-        const m = Math.floor(sec / 60).toString().padStart(2, "0");
-        const sv = (sec % 60).toString().padStart(2, "0");
-        document.getElementById("modeTimer").textContent = `${m}:${sv}`;
+      const fv = document.getElementById("focusVal");
+      const tv = document.getElementById("timerVal");
+      if (s.focusScore != null) {
+        fv.textContent = s.focusScore.toFixed(2);
+        fv.className = "stat-val";
+      }
+      if (s.timerSeconds) {
+        const m = Math.floor(s.timerSeconds/60).toString().padStart(2,"0");
+        const sec = (s.timerSeconds%60).toString().padStart(2,"0");
+        tv.textContent = `${m}:${sec}`;
+        tv.className = "stat-val";
       }
     });
   </script>
