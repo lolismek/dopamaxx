@@ -476,19 +476,6 @@ buffered For You observations or a configured Twitter/X MCP source. If neither
 is available, local tests and simulator demos still exercise the ranking logic
 with deterministic fallback embeddings.
 
-## Demo Script
-
-1. Start the acquisition server in simulator mode or from the DSI-24 capture
-   laptop.
-2. Open the dashboard and show live focus/reward movement.
-3. Load the Chrome extension and switch between Locked In and Locked Out.
-4. In Locked Out, scroll X/Twitter and dwell on a post long enough for capture.
-5. Show the Supabase observation row and embedding status.
-6. Switch back to Locked In and start a microdose run.
-7. Open the microdose feed and show posts ranked from prior EEG-positive
-   reactions.
-8. Explain the safety boundary: raw EEG is not uploaded by the extension; stored
-   observations contain derived timing, focus, reward, and post metadata.
 
 ## API Reference
 
