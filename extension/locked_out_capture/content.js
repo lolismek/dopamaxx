@@ -35,6 +35,11 @@
     scanTimer = window.setInterval(queueScan, SCAN_INTERVAL_MS);
     window.addEventListener("scroll", handleScroll, { passive: true });
     window.addEventListener("resize", queueScan, { passive: true });
+    console.log(`${LOG_PREFIX} active`, {
+      mode: currentMode,
+      scan_interval_ms: SCAN_INTERVAL_MS,
+      min_dwell_ms: MIN_DWELL_MS,
+    });
     queueScan();
   }
 
@@ -250,35 +255,44 @@
       main_visible_ratio: capture.main_visible_ratio,
     });
 
-    chrome.runtime.sendMessage({ type: CAPTURE_MESSAGE, capture }, (response) => {
-      const extensionRoundTripMs = Math.round(performance.now() - sentAtMs);
-      if (chrome.runtime.lastError) {
-        console.log(`${LOG_PREFIX} capture-error`, {
-          post_id: capture.post.platform_post_id,
-          extension_round_trip_ms: extensionRoundTripMs,
-          error: chrome.runtime.lastError.message,
-        });
-        return;
-      }
-      if (!response || !response.ok) {
-        console.log(`${LOG_PREFIX} capture-rejected`, {
-          post_id: capture.post.platform_post_id,
-          extension_round_trip_ms: extensionRoundTripMs,
-          error: response && response.error,
-        });
-        return;
-      }
+    try {
+      chrome.runtime.sendMessage({ type: CAPTURE_MESSAGE, capture }, (response) => {
+        const extensionRoundTripMs = Math.round(performance.now() - sentAtMs);
+        if (chrome.runtime.lastError) {
+          console.log(`${LOG_PREFIX} capture-error`, {
+            post_id: capture.post.platform_post_id,
+            extension_round_trip_ms: extensionRoundTripMs,
+            error: chrome.runtime.lastError.message,
+          });
+          return;
+        }
+        if (!response || !response.ok) {
+          console.log(`${LOG_PREFIX} capture-rejected`, {
+            post_id: capture.post.platform_post_id,
+            extension_round_trip_ms: extensionRoundTripMs,
+            error: response && response.error,
+          });
+          return;
+        }
 
-      console.log(`${LOG_PREFIX} capture-saved`, {
-        post_id: capture.post.platform_post_id,
-        extension_round_trip_ms: extensionRoundTripMs,
-        supabase_round_trip_ms: response.supabase_round_trip_ms,
-        reward_label: response.reward_label,
-        reward_score: response.reward_score,
-        embedding_status: response.embedding_status,
-        observation_id: response.observation_id,
+        console.log(`${LOG_PREFIX} capture-saved`, {
+          post_id: capture.post.platform_post_id,
+          extension_round_trip_ms: extensionRoundTripMs,
+          supabase_round_trip_ms: response.supabase_round_trip_ms,
+          reward_label: response.reward_label,
+          reward_score: response.reward_score,
+          embedding_status: response.embedding_status,
+          observation_id: response.observation_id,
+        });
       });
-    });
+    } catch (error) {
+      stop();
+      console.log(`${LOG_PREFIX} extension-context-invalidated`, {
+        post_id: capture.post.platform_post_id,
+        error: error && error.message ? error.message : String(error),
+        action: "reload the X tab after reloading the unpacked extension",
+      });
+    }
   }
 
   function logCandidateDetected(winner, nowMs) {
