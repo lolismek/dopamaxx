@@ -98,6 +98,28 @@ while working, DopaMAXX retrieves a few posts that look similar to past
 EEG-positive hits, shows them as a controlled microdose, and then redirects the
 user back into the work session.
 
+## Visual Demo
+
+**1. Microdose feed over X/Twitter.** DopaMAXX has a ranked queue ready, the
+extension is live, and the microdose window is showing the next reward candidate.
+
+![DopaMAXX microdose feed running over X/Twitter](attached_assets/devpost_microdose_feed.png)
+
+**2. Locked Out capture.** While the user scrolls X/Twitter, the extension
+detects stable, centered posts and saves EEG-labeled observations.
+
+![DopaMAXX Locked Out capture logs](attached_assets/devpost_locked_out_capture.png)
+
+**3. Captured observation payload.** A post becomes a structured memory with
+dwell time, reward label, reward score, embedding status, and Supabase timing.
+
+![DopaMAXX captured post observation payload](attached_assets/devpost_capture_payload.png)
+
+**4. Live EEG dashboard.** The acquisition service streams DSI-24 hardware data,
+derived focus/reward inference, signal quality, and raw channel traces.
+
+![DopaMAXX live EEG dashboard](attached_assets/devpost_live_eeg_dashboard.png)
+
 ## Technical Summary
 
 Technically, DopaMAXX is a retrieval-augmented recommendation system where the
@@ -217,19 +239,6 @@ feed that can be shown during a drift event.
 **The demo dashboard** gives judges something concrete to watch: live EEG
 status, stream metadata, focus/reward inference, mode changes, and microdose
 results.
-
-## Demo Media Slots
-
-Use this section as a checklist for the Devpost submission. Drop final assets
-into `attached_assets/` or a future `docs/devpost/` folder.
-
-| Slot | What to show | Suggested asset |
-| --- | --- | --- |
-| Hero | The extension popup or live dashboard with the DSI-24 running | Existing screenshot above |
-| Workflow | Three-panel flow: Locked Out capture -> RAG memory -> Locked In microdose | `docs/devpost/workflow.png` |
-| Architecture | The Mermaid diagram above exported as an image | `docs/devpost/architecture.png` |
-| Live EEG | Dashboard showing hardware stream, focus score, and reward score | `docs/devpost/live-eeg.png` |
-| Microdose | Ranked feed of posts selected from EEG-positive history | `docs/devpost/microdose-feed.png` |
 
 ## What Works Today
 
