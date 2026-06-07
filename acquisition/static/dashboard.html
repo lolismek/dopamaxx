@@ -7,17 +7,16 @@
   <style>
     /* ── TOKENS ── */
     :root {
-      --bg:     #0a0a08;
-      --s1:     #111110;
-      --s2:     #0d0d0b;
-      --text:   #e4e0d6;
-      --sub:    #484540;
-      --line:   rgba(255,255,255,0.08);
-      --accent: #c84e14;
-      --good:   #22c55e;
-      --bad:    #e53935;
-      --warn:   #c89020;
-      --scope:  #050504;
+      --bg:     #0c0c0a;
+      --s1:     #131310;
+      --s2:     #0f0f0d;
+      --text:   #dedad2;
+      --sub:    #504d46;
+      --line:   rgba(255,255,255,0.06);
+      --accent: #b8693a;   /* muted warm orange */
+      --good:   #5bbf8a;   /* soft sage-green, not neon */
+      --bad:    #d96b6b;   /* soft coral, not harsh red */
+      --scope:  #060605;
       --dur-f:  100ms;
       --dur-n:  200ms;
       --ease:   cubic-bezier(0.2,0,0,1);
@@ -49,13 +48,14 @@
     .badges{display:flex;gap:4px;align-items:center;flex-wrap:wrap}
     .badge{
       font-size:9px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;
-      padding:2px 7px;border:1px solid var(--line);color:var(--sub);white-space:nowrap;
+      padding:2px 8px;border:1px solid var(--line);color:var(--sub);white-space:nowrap;
+      border-radius:3px;
       transition:color var(--dur-f) var(--ease),border-color var(--dur-f) var(--ease);
     }
-    .badge.good{color:var(--good);border-color:rgba(34,197,94,.3)}
-    .badge.warn{color:var(--warn);border-color:rgba(200,144,32,.3)}
-    .badge.bad {color:var(--bad); border-color:rgba(229,57,53,.3)}
-    .badge.hi  {color:var(--accent);border-color:rgba(200,78,20,.4)}
+    .badge.good{color:var(--good);border-color:rgba(91,191,138,.25)}
+    .badge.warn{color:var(--accent);border-color:rgba(184,105,58,.25)}
+    .badge.bad {color:var(--bad); border-color:rgba(217,107,107,.25)}
+    .badge.hi  {color:var(--accent);border-color:rgba(184,105,58,.3)}
 
     /* ── METRIC CARDS ── */
     .metrics-strip{
@@ -212,13 +212,14 @@
     /* ── SIM BUTTONS ── */
     .sim-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;margin-top:10px}
     .sim-btn{
-      padding:7px 0;border:1px solid rgba(200,78,20,0.3);background:transparent;
+      padding:7px 0;border:1px solid rgba(184,105,58,0.25);background:transparent;
       color:var(--accent);font:inherit;font-size:9px;font-weight:700;
       letter-spacing:0.14em;text-transform:uppercase;cursor:pointer;
+      border-radius:3px;
       transition:background var(--dur-f) var(--ease),border-color var(--dur-f) var(--ease);
     }
-    .sim-btn:hover{background:rgba(200,78,20,0.1);border-color:var(--accent)}
-    .sim-btn:active{background:rgba(200,78,20,0.2)}
+    .sim-btn:hover{background:rgba(184,105,58,0.1);border-color:var(--accent)}
+    .sim-btn:active{background:rgba(184,105,58,0.18)}
     .sim-btn.full{grid-column:1/-1}
     .sim-msg{margin-top:8px;font-size:9px;color:var(--sub);letter-spacing:0.06em;min-height:16px}
 
@@ -445,24 +446,24 @@
 <script>
   // ─── PALETTE (mirrors CSS variables for canvas draw calls) ────────────────
   const P = {
-    bg:      '#0a0a08',
-    panel:   '#111110',
-    panel2:  '#0d0d0b',
-    surface: '#0d0d0b',
-    text:    '#e4e0d6',
-    sub:     '#484540',
-    line:    'rgba(255,255,255,0.07)',
-    accent:  '#c84e14',
-    good:    '#22c55e',
-    warn:    '#c89020',
-    bad:     '#e53935',
-    scopeBg: '#050504',
-    phEEG:   '#22c55e',
-    phEMG:   '#c89820',
-    phECG:   '#e53935',
-    gridDk:  'rgba(255,255,255,0.04)',
-    gridLt:  'rgba(255,255,255,0.05)',
-    emgCh:   ['#c89820','#c86018','#3a88c8','#8a68b8'],
+    bg:      '#0c0c0a',
+    panel:   '#131310',
+    panel2:  '#0f0f0d',
+    surface: '#0f0f0d',
+    text:    '#dedad2',
+    sub:     '#504d46',
+    line:    'rgba(255,255,255,0.06)',
+    accent:  '#b8693a',
+    good:    '#5bbf8a',
+    warn:    '#b8693a',   // collapsed to accent — one warm color
+    bad:     '#d96b6b',
+    scopeBg: '#060605',
+    phEEG:   '#5bbf8a',  // soft sage, not fluorescent
+    phEMG:   '#b8693a',  // same warm orange as accent
+    phECG:   '#d96b6b',  // soft coral
+    gridDk:  'rgba(255,255,255,0.03)',
+    gridLt:  'rgba(255,255,255,0.04)',
+    emgCh:   ['#b8693a','#9a7a58','#6a9ab8','#8a98a8'],  // muted, no neon
   };
 
   // ─── STATE ────────────────────────────────────────────────────────────────
