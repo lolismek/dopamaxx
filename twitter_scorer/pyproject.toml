@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dopamaxx-twitter-scorer"
+version = "0.1.0"
+description = "Rank Twitter posts by EEG dopamine signal + TRIBE v2 prediction."
+requires-python = ">=3.11"
+dependencies = [
+    "websockets>=12.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+]
+scrape = [
+    "twscrape>=0.12",
+]
+tribe = [
+    "dopamaxx-tribev2-text @ file:///${PROJECT_ROOT}/../tribev2_text",
+]
+
+[project.scripts]
+twitter-scorer = "twitter_scorer.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "../tribev2_text/src"]
+addopts = "-ra"
+asyncio_mode = "auto"
