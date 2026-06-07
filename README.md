@@ -1,14 +1,15 @@
 # DopaMAXX
 
-**Work harder, play harder.**
+**Work harder, play harder. Then let the EEG decide what "play" means.**
 
-DopaMAXX is an EEG-driven focus companion that turns social media from an
-uncontrolled distraction into a measured, personalized reward loop. A DSI-24 EEG
-cap streams live brain signals, a Chrome extension watches what the user pauses
-on in X/Twitter, and a Supabase-backed recommendation system learns which posts
-produce positive focus/reward responses. When the user starts drifting during a
-work session, DopaMAXX serves a tiny "microdose" of content predicted to
-re-engage them, then sends them back to work.
+DopaMAXX is a slightly ridiculous, very real EEG-driven experiment: what if your
+focus app could learn exactly what kind of brain-rot your brain wants, then dose
+it back to you with precision? A DSI-24 EEG cap streams live brain signals, a
+Chrome extension watches what the user pauses on in X/Twitter, and a
+Supabase-backed recommendation system learns which posts produce positive
+focus/reward responses. When the user starts drifting during a work session,
+DopaMAXX serves a tiny "microdose" of content predicted to spike engagement,
+then sends them back to work.
 
 Built for a hackathon by **zane, casper, ansh, and alex**.
 
@@ -19,31 +20,51 @@ Built for a hackathon by **zane, casper, ansh, and alex**.
 DopaMAXX has two modes. In **Locked Out**, the user is allowed to scroll
 X/Twitter. The extension detects the post they actually dwell on, pairs that
 post with the user's live EEG-derived reward/focus state, and stores the result
-as a labeled memory: hit, miss, or neutral. In **Locked In**, distracting sites
-are blocked while the EEG stream monitors whether the user is still focused. If
-focus drops, DopaMAXX runs a retrieval-and-ranking loop over candidate posts,
-selects content similar to prior EEG-positive hits and dissimilar to misses, and
-shows only a short microdose before returning the user to work.
+as a labeled memory: hit, miss, or neutral. This is the intentionally
+brain-rotty part: the hackathon version tries to learn what produces the biggest
+reward signal.
 
-The core idea is simple: most focus products only block dopamine. DopaMAXX learns
-what kind of content your brain responds to, then uses that content precisely
-when it can help you recover focus instead of falling into a scroll spiral.
+In **Locked In**, distracting sites are blocked while the EEG stream monitors
+whether the user is still focused. If focus drops, DopaMAXX runs a
+retrieval-and-ranking loop over candidate posts, selects content similar to prior
+EEG-positive hits and dissimilar to misses, and shows only a short microdose
+before returning the user to work.
+
+The core idea is not "we solved social media." We definitely did not. The demo
+is closer to: what if the doomscrolling machine had a brain-computer interface
+and you could see, store, and redirect the reward signal? That is funny, a little
+cursed, and technically useful.
 
 Important scope note: DopaMAXX does **not** claim to measure dopamine directly.
 In this project, "dopamine" means an explainable EEG-derived reward/engagement
 proxy from the headset stream.
 
+## The Serious Version
+
+The hackathon version maximizes for content that appears to trigger reward. That
+is fun for a demo because the objective is obvious and visible: find the posts
+that light the user up. But the same system can be pointed at a much healthier
+goal with very little architectural change.
+
+Instead of ranking posts by predicted dopamine/reward, DopaMAXX could rank for
+healthy content: posts that calm the user down, teach them something, improve
+mood without causing a spiral, or help them re-engage with work. The capture
+pipeline, embeddings, RAG memory, and candidate ranking stay the same. The only
+thing that changes is the objective function.
+
+In other words: today it is a meme-y dopamine maximizer. Tomorrow it could be a
+personalized filter for content that is actually good for you.
+
 ## The Problem
 
 Modern focus tools treat distraction as binary: block the site or unblock the
-site. That misses how people actually work. Sometimes a short reward helps a
-person reset. Sometimes a five-minute break becomes thirty minutes of scrolling.
-The missing piece is feedback: the system does not know whether the user's brain
-is focused, drifting, bored, or re-engaged.
+site. Social platforms do the opposite: they optimize the reward loop as hard as
+possible, usually for time spent on platform. Neither side gives the user much
+control over the signal itself.
 
-Social platforms already optimize the reward loop, but they optimize it for time
-spent on platform. We asked a different question: what if the reward loop could
-be controlled by the user and grounded in their own live cognitive state?
+We wanted to expose that loop. If a feed can learn what keeps you scrolling, can
+you build a user-owned system that learns the same signal, stores it locally or
+in your own backend, and lets you choose what to optimize for?
 
 ## The Solution
 
@@ -59,6 +80,11 @@ RAG-style recommendation engine into one closed feedback loop:
    memory and show a small, capped set of posts.
 5. **Return to work:** once focus recovers or the cap is reached, DopaMAXX closes
    the loop and puts the user back into Locked In mode.
+
+For the hackathon, we use the most chaotic objective because it is easy to
+understand: maximize the content that seems to trigger reward. For a real
+product, the same loop can optimize for healthier targets by changing the labels
+and ranking policy.
 
 ## Project Workflow
 
@@ -83,9 +109,12 @@ context to a Supabase Edge Function, and stores observations in Postgres with
 vector embeddings. The ranking algorithm scores candidate posts by similarity to
 the user's hit set minus similarity to their miss set, so the recommendation
 target is not generic engagement - it is the user's measured neural response.
-TRIBE v2 can improve this RAG loop by replacing generic text embeddings with
-brain-aligned content signatures, allowing retrieval to match posts by predicted
-activation pattern rather than only by surface-level semantic similarity.
+The objective is also swappable: reward-maximizing labels can be replaced with
+healthy-content labels, calmness labels, learning labels, or any other
+user-defined outcome. TRIBE v2 can improve this RAG loop by replacing generic
+text embeddings with brain-aligned content signatures, allowing retrieval to
+match posts by predicted activation pattern rather than only by surface-level
+semantic similarity.
 
 ## Architecture
 
@@ -153,6 +182,12 @@ close. With TRIBE v2, two posts could be similar because they belong to the same
 personal "tribe" of content that historically produces the same neural reward
 pattern for this user. That turns the retrieval layer from generic semantic
 search into a personalized brain-aligned memory.
+
+That same memory does not have to chase the strongest dopamine spike. If the
+label changes from "reward hit" to "healthy hit," the exact same RAG loop becomes
+a personalized filter for content that leaves the user better off. The project is
+funny because the demo objective is brain-rot; it is useful because the machinery
+is objective-agnostic.
 
 ## How We Built It
 
@@ -222,6 +257,9 @@ into `attached_assets/` or a future `docs/devpost/` folder.
   OpenAI keys have to stay in Edge Functions or backend services.
 - **A recommender can become the distraction.** The microdose loop needs caps,
   queue state, and a return-to-work condition so it stays bounded.
+- **The objective function matters.** Maximizing reward is funny and demoable,
+  but the same system should eventually optimize for content the user endorses,
+  not just content that spikes engagement.
 
 ## Accomplishments
 
@@ -250,6 +288,8 @@ security, and a demo that still works under hackathon pressure.
 
 - Per-user EEG calibration instead of fixed heuristic thresholds.
 - TRIBE v2 embeddings or signatures for brain-aligned retrieval.
+- A healthier ranking mode that filters for useful, calming, educational, or
+  mood-improving content instead of raw reward maximization.
 - Multimodal post embeddings that include image/video content.
 - A learned preference head trained on the user's EEG hit/miss history.
 - Stronger artifact rejection for blinks, motion, and disconnected electrodes.
