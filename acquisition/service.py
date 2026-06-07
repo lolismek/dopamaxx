@@ -11,16 +11,31 @@ from importlib import resources
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
+from acquisition.autoscroll import AutoscrollService
 from acquisition.bridge import BridgeProcess, build_bridge_command
 from acquisition.config import BridgeConfigError, require_port, resolve_bridge_path
+from acquisition.content_models import (
+    AutoscrollCancelRequest,
+    AutoscrollStartRequest,
+    PostReaction,
+    QueueStatusUpdateRequest,
+    ReactionIngestRequest,
+)
+from acquisition.content_store import ContentStore, content_store_from_env
 from acquisition.frames import FrameMetadata, build_eeg_frame, status_frame
 from acquisition.lsl import LSLReader, health_check_inlet, wait_for_stream_inlet
 from acquisition.raw_stream import encode_raw_frame, hello_message
+from acquisition.scoring import EmbeddingProvider, embedding_provider_from_env
 from acquisition.simulator import SineWaveSimulator
 from acquisition.spec import CHANNEL_LABELS, HEALTH_DEFAULTS, SAMPLE_RATE_HZ, STREAM_NAME
+from acquisition.twitter_mcp import CandidateSource, twitter_mcp_from_env
+
+REWARD_HIT_THRESHOLD = 0.35
+REWARD_MISS_THRESHOLD = -0.25
 
 
 @dataclass(frozen=True)
@@ -218,7 +233,13 @@ class AcquisitionRuntime:
         self.message = f"{message} {hint}" if hint else message
 
 
-def create_app(runtime: AcquisitionRuntime) -> FastAPI:
+def create_app(
+    runtime: AcquisitionRuntime,
+    *,
+    content_store: ContentStore | None = None,
+    candidate_source: CandidateSource | None = None,
+    embedder: EmbeddingProvider | None = None,
+) -> FastAPI:
     """Create the acquisition web app."""
 
     @contextlib.asynccontextmanager
@@ -230,6 +251,20 @@ def create_app(runtime: AcquisitionRuntime) -> FastAPI:
             runtime.stop()
 
     app = FastAPI(title="DopaMAXX Acquisition", lifespan=lifespan)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    store = content_store or content_store_from_env()
+    post_embedder = embedder or embedding_provider_from_env()
+    autoscroll = AutoscrollService(
+        store=store,
+        candidate_source=candidate_source or twitter_mcp_from_env(),
+        embedder=post_embedder,
+    )
 
     @app.get("/", response_class=HTMLResponse)
     def dashboard() -> str:
@@ -250,6 +285,66 @@ def create_app(runtime: AcquisitionRuntime) -> FastAPI:
     @app.post("/sim/inject")
     def inject(request: InjectionRequest) -> dict:
         return runtime.inject(request)
+
+    @app.post("/locked-out/reactions")
+    async def ingest_reaction(request: ReactionIngestRequest) -> dict:
+        try:
+            embedding = await post_embedder.embed_post(request.post)
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"post embedding failed: {exc}") from exc
+
+        reaction = PostReaction(
+            user_id=request.user_id,
+            session_id=request.session_id,
+            post_id=request.post.post_id,
+            text=request.post.text,
+            author=request.post.author,
+            url=request.post.url,
+            media_urls=request.post.media_urls,
+            embedding=embedding,
+            reward_score=request.reward_score,
+            focus_score=request.focus_score,
+            label=request.resolved_label(REWARD_HIT_THRESHOLD, REWARD_MISS_THRESHOLD),
+            dwell_ms=request.dwell_ms,
+            eeg_features=request.eeg_features,
+            metadata={"post_metadata": request.post.metadata, "source": request.post.source},
+        )
+        stored = await store.insert_reaction(reaction)
+        return {"reaction": stored.model_dump(mode="json")}
+
+    @app.post("/agent/autoscroll/start")
+    async def start_autoscroll(request: AutoscrollStartRequest) -> dict:
+        try:
+            run = await autoscroll.start(request)
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return {"run": run.model_dump(mode="json")}
+
+    @app.post("/agent/autoscroll/cancel")
+    async def cancel_autoscroll(request: AutoscrollCancelRequest) -> dict:
+        run = await autoscroll.cancel(request.run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail="agent run not found")
+        return {"run": run.model_dump(mode="json")}
+
+    @app.get("/agent/autoscroll/runs/{run_id}")
+    async def get_autoscroll_run(run_id: str) -> dict:
+        run = await store.get_agent_run(run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail="agent run not found")
+        return {"run": run.model_dump(mode="json")}
+
+    @app.get("/feed/microdose")
+    async def microdose_feed(user_id: str, session_id: str, limit: int = 100) -> dict:
+        items = await store.list_ready_queue(user_id=user_id, session_id=session_id, limit=limit)
+        return {"items": [item.model_dump(mode="json") for item in items]}
+
+    @app.patch("/feed/microdose/{queue_id}")
+    async def update_microdose_item(queue_id: str, request: QueueStatusUpdateRequest) -> dict:
+        item = await store.update_queue_status(queue_id, request.status)
+        if item is None:
+            raise HTTPException(status_code=404, detail="queued item not found")
+        return {"item": item.model_dump(mode="json")}
 
     @app.websocket("/stream/eeg")
     async def eeg_stream(websocket: WebSocket) -> None:

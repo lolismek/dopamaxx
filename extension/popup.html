@@ -204,6 +204,53 @@
       background: rgba(232,86,10,0.06);
       border-color: rgba(232,86,10,0.6);
     }
+
+    .microdose-section {
+      padding: 16px;
+      border-top: 1px solid var(--line);
+    }
+
+    .microdose-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .microdose-count {
+      color: var(--sub);
+      font-size: 10px;
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .microdose-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .btn.microdose {
+      padding: 9px 0;
+      font-size: 9px;
+    }
+
+    .btn.microdose.primary {
+      border-color: rgba(232,86,10,0.4);
+      color: var(--accent);
+    }
+
+    .microdose-status {
+      min-height: 14px;
+      color: var(--sub);
+      font-size: 10px;
+      line-height: 1.4;
+      text-align: center;
+    }
   </style>
 </head>
 <body>
@@ -244,6 +291,18 @@
       </label>
     </div>
     <button class="btn" id="switchBtn" disabled>Switch Mode</button>
+  </div>
+
+  <div class="microdose-section">
+    <div class="microdose-head">
+      <span class="ctrl-eyebrow">Microdose</span>
+      <span class="microdose-count" id="microdoseCount">0/20</span>
+    </div>
+    <div class="microdose-actions">
+      <button class="btn microdose primary" id="microdoseBtn">Start Run</button>
+      <button class="btn microdose" id="feedBtn">Open Feed</button>
+    </div>
+    <div class="microdose-status" id="microdoseStatus">Manual demo trigger</div>
   </div>
 
   <script src="popup.js"></script>
