@@ -3,7 +3,7 @@
 
   const MODE_LOCKED_OUT = "locked_out";
   const SCAN_INTERVAL_MS = 250;
-  const SCROLL_IDLE_MS = 700;
+  const SCROLL_IDLE_MS = 300;
   const MIN_DWELL_MS = 1200;
   const CAPTURE_MESSAGE = "locked_out_capture_post";
   const STATUS_MESSAGE = "get_status";
@@ -286,6 +286,9 @@
 
         console.log(`${LOG_PREFIX} capture-saved`, {
           post_id: capture.post.platform_post_id,
+          author: capture.post.author_handle,
+          dwell_ms: capture.dwell_ms,
+          scroll_idle_before_detection_ms: capture.scroll_idle_before_detection_ms,
           extension_round_trip_ms: extensionRoundTripMs,
           supabase_round_trip_ms: response.supabase_round_trip_ms,
           reward_label: response.reward_label,
