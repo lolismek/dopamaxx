@@ -1,0 +1,5 @@
+.server.*.log
+.real.*.log
+__pycache__/
+.pytest_cache/
+*.py[cod]

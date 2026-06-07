@@ -1,0 +1,668 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DopaMAXX Acquisition</title>
+  <style>
+    :root {
+      --bg: #101214;
+      --panel: #181c20;
+      --panel-2: #20262b;
+      --text: #f2f5f7;
+      --muted: #9aa7b1;
+      --line: #2e3840;
+      --accent: #41d6b1;
+      --warn: #f6c85f;
+      --bad: #ff6b6b;
+      --blue: #72a7ff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    main {
+      width: min(1500px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 20px 0 28px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    .status-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .badge {
+      min-height: 28px;
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 4px 9px;
+      color: var(--muted);
+      background: var(--panel);
+      font-size: 13px;
+    }
+
+    .badge.good {
+      color: var(--accent);
+      border-color: rgba(65, 214, 177, 0.35);
+    }
+
+    .badge.warn {
+      color: var(--warn);
+      border-color: rgba(246, 200, 95, 0.35);
+    }
+
+    .badge.bad {
+      color: var(--bad);
+      border-color: rgba(255, 107, 107, 0.35);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      gap: 14px;
+      align-items: start;
+    }
+
+    section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .panel-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel-2);
+    }
+
+    .panel-title {
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .metric-row {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .metric {
+      min-height: 58px;
+      padding: 9px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #14181b;
+    }
+
+    .metric label {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .metric strong {
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .scope-wrap {
+      width: 100%;
+      height: min(68vh, 760px);
+      min-height: 520px;
+      padding: 10px 12px 12px;
+    }
+
+    .topo-wrap {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      padding: 12px 14px 14px;
+    }
+
+    canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      border-radius: 6px;
+      background: #0d0f11;
+    }
+
+    aside {
+      display: grid;
+      gap: 14px;
+    }
+
+    .side-body {
+      padding: 12px 14px 14px;
+    }
+
+    .kv {
+      display: grid;
+      gap: 8px;
+      font-size: 13px;
+    }
+
+    .kv div {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(46, 56, 64, 0.65);
+    }
+
+    .kv span {
+      color: var(--muted);
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    button {
+      min-height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      color: var(--text);
+      background: #14181b;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      border-color: var(--blue);
+      background: #1b2228;
+    }
+
+    .message {
+      min-height: 42px;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    @media (max-width: 980px) {
+      main {
+        width: min(100vw - 20px, 760px);
+      }
+
+      header {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .status-row {
+        justify-content: flex-start;
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      .metric-row {
+        grid-template-columns: 1fr;
+      }
+
+      .scope-wrap {
+        min-height: 500px;
+        height: 64vh;
+      }
+
+      .topo-wrap {
+        max-width: 520px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>DopaMAXX Acquisition</h1>
+      <div class="status-row">
+        <span id="sourceBadge" class="badge">source</span>
+        <span id="statusBadge" class="badge">starting</span>
+        <span id="streamBadge" class="badge">DSI24-EEG</span>
+      </div>
+    </header>
+
+    <div class="grid">
+      <section>
+        <div class="panel-head">
+          <div class="panel-title">Live EEG</div>
+          <div id="channelCount" class="badge">19 channels</div>
+        </div>
+        <div class="metric-row">
+          <div class="metric">
+            <label>Effective rate</label>
+            <strong id="rate">0.0 Hz</strong>
+          </div>
+          <div class="metric">
+            <label>Buffered samples</label>
+            <strong id="buffered">0</strong>
+          </div>
+          <div class="metric">
+            <label>Latest age</label>
+            <strong id="age">n/a</strong>
+          </div>
+        </div>
+        <div class="scope-wrap">
+          <canvas id="scope"></canvas>
+        </div>
+      </section>
+
+      <aside>
+        <section>
+          <div class="panel-head">
+            <div class="panel-title">Brain Topology</div>
+            <div id="topoScale" class="badge">activity</div>
+          </div>
+          <div class="topo-wrap">
+            <canvas id="topomap"></canvas>
+          </div>
+        </section>
+
+        <section>
+          <div class="panel-head">
+            <div class="panel-title">Connection</div>
+          </div>
+          <div class="side-body">
+            <div class="kv">
+              <div><span>Stream</span><strong id="streamName">DSI24-EEG</strong></div>
+              <div><span>Sample rate</span><strong id="sampleRate">300 Hz</strong></div>
+              <div><span>Flat channels</span><strong id="flatChannels">0</strong></div>
+              <div><span>Clipping flags</span><strong id="clipChannels">0</strong></div>
+            </div>
+            <div id="message" class="message"></div>
+          </div>
+        </section>
+
+        <section>
+          <div class="panel-head">
+            <div class="panel-title">Simulator Injection</div>
+          </div>
+          <div class="side-body">
+            <div class="controls">
+              <button data-state="Focused">Focused</button>
+              <button data-state="Drifting">Drifting</button>
+              <button data-state="Reward Hit">Reward Hit</button>
+              <button data-state="Reward Miss">Reward Miss</button>
+              <button data-state="Neutral">Neutral</button>
+            </div>
+            <div id="injectMessage" class="message"></div>
+          </div>
+        </section>
+      </aside>
+    </div>
+  </main>
+
+  <script>
+    const canvas = document.getElementById("scope");
+    const ctx = canvas.getContext("2d");
+    const topoCanvas = document.getElementById("topomap");
+    const topoCtx = topoCanvas.getContext("2d");
+    let lastFrame = null;
+    let reconnectTimer = null;
+    let topoSmoothed = null;
+
+    const topoPositions = {
+      Fp1: [-0.34, -0.88], Fp2: [0.34, -0.88],
+      F7: [-0.78, -0.48], F3: [-0.42, -0.46], Fz: [0.00, -0.48], F4: [0.42, -0.46], F8: [0.78, -0.48],
+      T3: [-0.92, 0.00], C3: [-0.46, 0.00], Cz: [0.00, 0.00], C4: [0.46, 0.00], T4: [0.92, 0.00],
+      T5: [-0.78, 0.48], P3: [-0.42, 0.46], Pz: [0.00, 0.48], P4: [0.42, 0.46], T6: [0.78, 0.48],
+      O1: [-0.34, 0.86], O2: [0.34, 0.86]
+    };
+
+    function connect() {
+      const protocol = location.protocol === "https:" ? "wss" : "ws";
+      const ws = new WebSocket(`${protocol}://${location.host}/stream/eeg`);
+      ws.onmessage = event => {
+        lastFrame = JSON.parse(event.data);
+        updateStats(lastFrame);
+        draw(lastFrame);
+        drawTopomap(lastFrame);
+      };
+      ws.onclose = () => {
+        setBadge("statusBadge", "disconnected", "bad");
+        if (!reconnectTimer) {
+          reconnectTimer = setTimeout(() => {
+            reconnectTimer = null;
+            connect();
+          }, 1000);
+        }
+      };
+      ws.onerror = () => ws.close();
+    }
+
+    function setBadge(id, text, kind) {
+      const el = document.getElementById(id);
+      el.textContent = text;
+      el.className = `badge ${kind || ""}`.trim();
+    }
+
+    function updateStats(frame) {
+      const meta = frame.metadata || {};
+      const stats = frame.stats || {};
+      const quality = frame.quality || {};
+      const status = meta.connection_status || "starting";
+      const kind = status === "connected" ? "good" : status === "degraded" ? "warn" : "";
+      setBadge("statusBadge", status, kind);
+      setBadge("sourceBadge", meta.source_mode || "source", meta.source_mode === "simulator" ? "good" : "");
+      setBadge("streamBadge", meta.stream_name || "DSI24-EEG", "");
+      document.getElementById("streamName").textContent = meta.stream_name || "DSI24-EEG";
+      document.getElementById("sampleRate").textContent = `${formatNumber(meta.sample_rate_hz || 0, 0)} Hz`;
+      document.getElementById("channelCount").textContent = `${(meta.channel_labels || []).length} channels`;
+      document.getElementById("rate").textContent = `${formatNumber(stats.effective_rate_hz || 0, 1)} Hz`;
+      document.getElementById("buffered").textContent = String(stats.buffer_samples || 0);
+      document.getElementById("age").textContent = stats.latest_sample_age_ms == null ? "n/a" : `${formatNumber(stats.latest_sample_age_ms, 0)} ms`;
+      document.getElementById("flatChannels").textContent = String((quality.flat_channel_labels || []).length);
+      document.getElementById("clipChannels").textContent = String((quality.clip_channel_labels || []).length);
+      document.getElementById("message").textContent = meta.message || "";
+    }
+
+    function draw(frame) {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const width = Math.max(300, Math.floor(rect.width * dpr));
+      const height = Math.max(400, Math.floor(rect.height * dpr));
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+      }
+
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = "#0d0f11";
+      ctx.fillRect(0, 0, width, height);
+
+      const labels = frame.metadata.channel_labels || [];
+      const channels = frame.samples.channels || [];
+      const t = frame.samples.t_rel || [];
+      const n = labels.length || 19;
+      const left = 54 * dpr;
+      const right = 12 * dpr;
+      const top = 12 * dpr;
+      const bottom = 20 * dpr;
+      const plotW = width - left - right;
+      const plotH = height - top - bottom;
+      const rowH = plotH / n;
+
+      ctx.strokeStyle = "rgba(120, 135, 150, 0.18)";
+      ctx.lineWidth = 1 * dpr;
+      ctx.fillStyle = "#9aa7b1";
+      ctx.font = `${11 * dpr}px ui-sans-serif, system-ui, sans-serif`;
+      for (let i = 0; i < n; i += 1) {
+        const y = top + rowH * (i + 0.5);
+        ctx.beginPath();
+        ctx.moveTo(left, y);
+        ctx.lineTo(width - right, y);
+        ctx.stroke();
+        ctx.fillText(labels[i] || `ch${i + 1}`, 8 * dpr, y + 4 * dpr);
+      }
+
+      if (!t.length || !channels.length) {
+        ctx.fillStyle = "#9aa7b1";
+        ctx.fillText("Waiting for samples", left, top + 24 * dpr);
+        return;
+      }
+
+      const minT = t[0];
+      const maxT = t[t.length - 1] || 0;
+      const spanT = Math.max(0.001, maxT - minT);
+      ctx.strokeStyle = "#41d6b1";
+      ctx.lineWidth = 1.3 * dpr;
+      for (let ch = 0; ch < Math.min(n, channels.length); ch += 1) {
+        const values = channels[ch] || [];
+        if (values.length < 2) continue;
+        const stats = channelStats(values);
+        const centerY = top + rowH * (ch + 0.5);
+        const amp = rowH * 0.34;
+        ctx.beginPath();
+        for (let i = 0; i < values.length; i += 1) {
+          const x = left + ((t[i] - minT) / spanT) * plotW;
+          const y = centerY - ((values[i] - stats.mean) / stats.scale) * amp;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+    }
+
+    function drawTopomap(frame) {
+      const rect = topoCanvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const size = Math.max(260, Math.floor(Math.min(rect.width, rect.height || rect.width) * dpr));
+      if (topoCanvas.width !== size || topoCanvas.height !== size) {
+        topoCanvas.width = size;
+        topoCanvas.height = size;
+      }
+
+      const labels = frame.metadata.channel_labels || [];
+      const channels = frame.samples.channels || [];
+      const values = labels.map((label, index) => {
+        const series = channels[index] || [];
+        return recentActivity(series);
+      });
+      const finite = values.filter(Number.isFinite);
+      const scale = robustScale(finite);
+      const normalized = values.map(value => Number.isFinite(value) ? Math.max(-1, Math.min(1, value / scale)) : 0);
+      if (!topoSmoothed || topoSmoothed.length !== normalized.length) {
+        topoSmoothed = normalized.slice();
+      } else {
+        topoSmoothed = topoSmoothed.map((oldValue, i) => oldValue * 0.82 + normalized[i] * 0.18);
+      }
+
+      const ctx = topoCtx;
+      ctx.clearRect(0, 0, size, size);
+      ctx.fillStyle = "#0d0f11";
+      ctx.fillRect(0, 0, size, size);
+
+      const centerX = size / 2;
+      const centerY = size / 2;
+      const radius = size * 0.41;
+      const image = ctx.createImageData(size, size);
+      for (let y = 0; y < size; y += 1) {
+        for (let x = 0; x < size; x += 1) {
+          const nx = (x - centerX) / radius;
+          const ny = (y - centerY) / radius;
+          const r = Math.hypot(nx, ny);
+          const offset = (y * size + x) * 4;
+          if (r > 1) {
+            image.data[offset] = 13;
+            image.data[offset + 1] = 15;
+            image.data[offset + 2] = 17;
+            image.data[offset + 3] = 255;
+            continue;
+          }
+          const interpolated = interpolateAt(nx, ny, labels, topoSmoothed);
+          const color = topoColor(interpolated);
+          image.data[offset] = color[0];
+          image.data[offset + 1] = color[1];
+          image.data[offset + 2] = color[2];
+          image.data[offset + 3] = 255;
+        }
+      }
+      ctx.putImageData(image, 0, 0);
+
+      ctx.save();
+      ctx.strokeStyle = "#d8e3ea";
+      ctx.lineWidth = 2 * dpr;
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(centerX - 0.08 * radius, centerY - radius);
+      ctx.lineTo(centerX, centerY - 1.13 * radius);
+      ctx.lineTo(centerX + 0.08 * radius, centerY - radius);
+      ctx.stroke();
+
+      ctx.strokeStyle = "rgba(216, 227, 234, 0.8)";
+      ctx.beginPath();
+      ctx.arc(centerX - radius * 1.03, centerY, radius * 0.11, -Math.PI / 2, Math.PI / 2);
+      ctx.arc(centerX + radius * 1.03, centerY, radius * 0.11, Math.PI / 2, -Math.PI / 2);
+      ctx.stroke();
+
+      ctx.font = `${10 * dpr}px ui-sans-serif, system-ui, sans-serif`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      labels.forEach((label, index) => {
+        const pos = topoPositions[label];
+        if (!pos) return;
+        const x = centerX + pos[0] * radius;
+        const y = centerY + pos[1] * radius;
+        ctx.fillStyle = "#101214";
+        ctx.beginPath();
+        ctx.arc(x, y, 4.5 * dpr, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "#f2f5f7";
+        ctx.lineWidth = 1 * dpr;
+        ctx.stroke();
+        ctx.fillStyle = "#f2f5f7";
+        ctx.fillText(label, x, y - 12 * dpr);
+      });
+      ctx.restore();
+
+      document.getElementById("topoScale").textContent = `scale ${formatNumber(scale, 1)}`;
+    }
+
+    function interpolateAt(x, y, labels, values) {
+      let weighted = 0;
+      let total = 0;
+      for (let i = 0; i < labels.length; i += 1) {
+        const pos = topoPositions[labels[i]];
+        if (!pos) continue;
+        const dist2 = Math.max((x - pos[0]) ** 2 + (y - pos[1]) ** 2, 0.0025);
+        const weight = 1 / (dist2 ** 1.4);
+        weighted += values[i] * weight;
+        total += weight;
+      }
+      return total ? Math.max(-1, Math.min(1, weighted / total)) : 0;
+    }
+
+    function recentActivity(series) {
+      if (!series.length) return 0;
+      const tail = series.slice(Math.max(0, series.length - 180)).filter(Number.isFinite);
+      if (!tail.length) return 0;
+      const mean = tail.reduce((acc, value) => acc + value, 0) / tail.length;
+      const variance = tail.reduce((acc, value) => acc + (value - mean) ** 2, 0) / tail.length;
+      return Math.sqrt(variance);
+    }
+
+    function robustScale(values) {
+      if (!values.length) return 1;
+      const sorted = values.map(Math.abs).sort((a, b) => a - b);
+      const p90 = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.9))];
+      return Math.max(p90, 1e-6);
+    }
+
+    function topoColor(value) {
+      const v = Math.max(-1, Math.min(1, value));
+      const stops = [
+        [-1.0, [58, 103, 191]],
+        [-0.35, [65, 214, 177]],
+        [0.0, [21, 25, 28]],
+        [0.35, [246, 200, 95]],
+        [1.0, [255, 107, 107]]
+      ];
+      for (let i = 0; i < stops.length - 1; i += 1) {
+        const [aValue, aColor] = stops[i];
+        const [bValue, bColor] = stops[i + 1];
+        if (v >= aValue && v <= bValue) {
+          const t = (v - aValue) / (bValue - aValue);
+          return aColor.map((c, index) => Math.round(c + (bColor[index] - c) * t));
+        }
+      }
+      return stops[stops.length - 1][1];
+    }
+
+    function channelStats(values) {
+      let sum = 0;
+      let count = 0;
+      for (const value of values) {
+        if (Number.isFinite(value)) {
+          sum += value;
+          count += 1;
+        }
+      }
+      const mean = count ? sum / count : 0;
+      const deviations = values
+        .filter(Number.isFinite)
+        .map(value => Math.abs(value - mean))
+        .sort((a, b) => a - b);
+      const p95 = deviations.length ? deviations[Math.floor(deviations.length * 0.95)] : 1;
+      return { mean, scale: Math.max(p95 * 3, 1e-9) };
+    }
+
+    function formatNumber(value, digits) {
+      return Number.isFinite(Number(value)) ? Number(value).toFixed(digits) : "0";
+    }
+
+    document.querySelectorAll("button[data-state]").forEach(button => {
+      button.addEventListener("click", async () => {
+        const state = button.dataset.state;
+        const msg = document.getElementById("injectMessage");
+        try {
+          const res = await fetch("/sim/inject", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ state, duration_s: 5 })
+          });
+          const body = await res.json();
+          if (!res.ok) throw new Error(body.detail || "Injection failed");
+          msg.textContent = `${body.state} injected`;
+        } catch (err) {
+          msg.textContent = err.message;
+        }
+      });
+    });
+
+    window.addEventListener("resize", () => {
+      if (lastFrame) {
+        draw(lastFrame);
+        drawTopomap(lastFrame);
+      }
+    });
+
+    connect();
+  </script>
+</body>
+</html>
