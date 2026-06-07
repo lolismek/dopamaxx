@@ -19,13 +19,15 @@ let state = {
   workTabId: null,
   demoMode: false,
   timerSeconds: 0,
+  focusScore: null,
+  rewardScore: null,
   ws: null,
   wsConnected: false,
 };
 
 // ── WebSocket ──────────────────────────────────────────────────────────────
 
-const WS_URL = "ws://localhost:8765";
+const WS_URL = "ws://localhost:8000/stream/eeg";
 const WS_RETRY_MS = 3000;
 
 function connectWebSocket() {
@@ -59,14 +61,23 @@ function connectWebSocket() {
 }
 
 function handleBackendMessage(msg) {
-  if (state.demoMode) return; // demo mode ignores backend signals
+  // EEG frames from the acquisition service (msg has .samples, .channel_labels, etc.)
+  // Just keep the connection alive for now; mode changes come from the signal
+  // processing layer which sends { type: "mode_change", mode: "locked_in"|"locked_out" }
+  // or { type: "timer_update", seconds_remaining: N }.
+  if (state.demoMode) return;
 
   if (msg.type === "mode_change") {
     setMode(msg.mode);
   } else if (msg.type === "timer_update") {
     state.timerSeconds = msg.seconds_remaining;
     broadcastStatus();
+  } else if (msg.type === "scores_update") {
+    state.focusScore  = msg.focus_score  ?? state.focusScore;
+    state.rewardScore = msg.reward_score ?? state.rewardScore;
+    broadcastStatus();
   }
+  // EEG frames (no .type) are silently consumed — connection staying alive is enough.
 }
 
 // ── Mode management ────────────────────────────────────────────────────────
@@ -177,6 +188,8 @@ function getStatus() {
     demoMode: state.demoMode,
     wsConnected: state.wsConnected,
     timerSeconds: state.timerSeconds,
+    focusScore: state.focusScore,
+    rewardScore: state.rewardScore,
     workTabId: state.workTabId,
   };
 }
