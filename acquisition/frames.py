@@ -28,6 +28,7 @@ def build_eeg_frame(
     ring: RingBuffer,
     metadata: FrameMetadata,
     window_s: float = 5.0,
+    inference_window_s: float = 1.5,
     max_points: int = 900,
 ) -> dict:
     """Build the JSON-serializable live EEG frame."""
@@ -41,6 +42,10 @@ def build_eeg_frame(
 
     stats_ts = raw_ts.copy()
     inference_samples = samples.copy()
+    if inference_samples.size > 0:
+        max_inference_n = max(int(inference_window_s * metadata.sample_rate_hz), 1)
+        if inference_samples.shape[0] > max_inference_n:
+            inference_samples = inference_samples[-max_inference_n:]
 
     if samples.shape[0] > max_points:
         indices = np.linspace(0, samples.shape[0] - 1, max_points, dtype=int)
@@ -71,6 +76,7 @@ def build_eeg_frame(
             "effective_rate_hz": effective_rate_hz(stats_ts),
             "latest_sample_age_ms": latest_sample_age_ms(stats_ts) if stats_ts.size else None,
             "window_s": float(window_s),
+            "inference_window_s": float(inference_window_s),
         },
         "quality": quality_flags(samples, metadata.channel_labels),
         "inference": infer_live_state(
@@ -81,11 +87,20 @@ def build_eeg_frame(
     }
 
 
-def status_frame(metadata: FrameMetadata, window_s: float = 5.0) -> dict:
+def status_frame(
+    metadata: FrameMetadata,
+    window_s: float = 5.0,
+    inference_window_s: float = 1.5,
+) -> dict:
     """Build an empty frame for degraded/startup states."""
 
     empty = RingBuffer(capacity=1, n_channels=len(metadata.channel_labels))
-    return build_eeg_frame(empty, metadata=metadata, window_s=window_s)
+    return build_eeg_frame(
+        empty,
+        metadata=metadata,
+        window_s=window_s,
+        inference_window_s=inference_window_s,
+    )
 
 
 def _finite_list(values: np.ndarray) -> list[float | None]:

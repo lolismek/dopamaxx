@@ -47,6 +47,7 @@ class RuntimeConfig:
     bridge_path: str | Path | None = None
     stream_name: str = STREAM_NAME
     window_s: float = 5.0
+    inference_window_s: float = 1.5
     launch_timeout_s: float | None = None
 
 
@@ -142,6 +143,8 @@ class AcquisitionRuntime:
             "source_mode": meta.source_mode,
             "connection_status": meta.connection_status,
             "message": meta.message,
+            "window_s": self.config.window_s,
+            "inference_window_s": self.config.inference_window_s,
         }
 
     def health(self) -> dict:
@@ -168,7 +171,11 @@ class AcquisitionRuntime:
     def frame(self) -> dict:
         meta = self._frame_metadata()
         if self.reader is None:
-            return status_frame(meta, window_s=self.config.window_s)
+            return status_frame(
+                meta,
+                window_s=self.config.window_s,
+                inference_window_s=self.config.inference_window_s,
+            )
         if self.reader.last_error:
             meta = FrameMetadata(
                 stream_name=meta.stream_name,
@@ -178,7 +185,12 @@ class AcquisitionRuntime:
                 connection_status="degraded",
                 message=self.reader.last_error,
             )
-        return build_eeg_frame(self.reader.ring, metadata=meta, window_s=self.config.window_s)
+        return build_eeg_frame(
+            self.reader.ring,
+            metadata=meta,
+            window_s=self.config.window_s,
+            inference_window_s=self.config.inference_window_s,
+        )
 
     def raw_stream_metadata(self) -> dict:
         return self.metadata() | {

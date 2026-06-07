@@ -4,6 +4,7 @@ import numpy as np
 
 from acquisition.frames import FrameMetadata, build_eeg_frame
 from acquisition.ring_buffer import RingBuffer
+from acquisition.spec import CHANNEL_LABELS
 from acquisition.timebase import effective_rate_hz, synthetic_relative_time
 
 
@@ -58,3 +59,31 @@ def test_frame_stats_use_full_window_not_downsampled_plot_points() -> None:
 
     assert frame["stats"]["frame_samples"] == 100
     assert 299.0 < frame["stats"]["effective_rate_hz"] < 301.0
+
+
+def test_inference_uses_dedicated_recent_window(monkeypatch) -> None:
+    ring = RingBuffer(capacity=1800, n_channels=len(CHANNEL_LABELS))
+    samples = np.arange(1800 * len(CHANNEL_LABELS), dtype=float).reshape(1800, len(CHANNEL_LABELS))
+    raw_ts = np.arange(1800, dtype=float) / 300.0
+    ring.write(samples, raw_ts)
+    captured = {}
+
+    def fake_infer_live_state(inference_samples, _channel_labels, _sample_rate_hz):
+        captured["shape"] = inference_samples.shape
+        captured["first"] = float(inference_samples[0, 0])
+        return {"status": "ok"}
+
+    monkeypatch.setattr("acquisition.frames.infer_live_state", fake_infer_live_state)
+
+    frame = build_eeg_frame(
+        ring,
+        metadata=FrameMetadata(channel_labels=CHANNEL_LABELS, sample_rate_hz=300.0),
+        window_s=5.0,
+        inference_window_s=1.5,
+        max_points=100,
+    )
+
+    assert captured["shape"][0] == 450
+    assert captured["first"] == float(samples[-450, 0])
+    assert frame["stats"]["window_s"] == 5.0
+    assert frame["stats"]["inference_window_s"] == 1.5
