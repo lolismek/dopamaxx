@@ -3,6 +3,7 @@
 
   const MODE_LOCKED_OUT = "locked_out";
   const SCAN_INTERVAL_MS = 250;
+  const SCROLL_IDLE_MS = 700;
   const MIN_DWELL_MS = 1200;
   const DUPLICATE_SUPPRESSION_MS = 60000;
   const CAPTURE_MESSAGE = "locked_out_capture_post";
@@ -38,6 +39,7 @@
     console.log(`${LOG_PREFIX} active`, {
       mode: currentMode,
       scan_interval_ms: SCAN_INTERVAL_MS,
+      scroll_idle_ms: SCROLL_IDLE_MS,
       min_dwell_ms: MIN_DWELL_MS,
     });
     queueScan();
@@ -56,6 +58,8 @@
 
   function handleScroll() {
     lastScrollAtMs = performance.now();
+    currentWinner = null;
+    currentWinnerSinceMs = 0;
     queueScan();
   }
 
@@ -71,9 +75,11 @@
   function scan() {
     if (!shouldCapture()) return;
 
+    const nowMs = performance.now();
+    if (!isScrollIdle(nowMs)) return;
+
     const candidates = collectTweetCandidates();
     const winner = selector.pickCenteredPost(candidates, window.innerHeight);
-    const nowMs = performance.now();
 
     if (!winner) {
       currentWinner = null;
@@ -115,6 +121,9 @@
       post,
       dwell_ms: Math.round(dwellMs),
       detection_to_capture_ms: Math.round(nowMs - currentWinnerSinceMs),
+      scroll_idle_before_detection_ms: lastScrollAtMs > 0
+        ? Math.round(currentWinnerSinceMs - lastScrollAtMs)
+        : null,
       viewport_score: Number(winner.score.toFixed(4)),
       center_score: Number(winner.centerScore.toFixed(4)),
       main_visible_ratio: Number(winner.mainVisibleRatio.toFixed(4)),
@@ -130,6 +139,7 @@
         rect: currentWinner.rect,
         detection: {
           min_dwell_ms: MIN_DWELL_MS,
+          scroll_idle_ms: SCROLL_IDLE_MS,
           duplicate_suppression_ms: DUPLICATE_SUPPRESSION_MS,
           selector_version: "centered_post_v1",
         },
@@ -251,6 +261,7 @@
       author: capture.post.author_handle,
       dwell_ms: capture.dwell_ms,
       detection_to_capture_ms: capture.detection_to_capture_ms,
+      scroll_idle_before_detection_ms: capture.scroll_idle_before_detection_ms,
       viewport_score: capture.viewport_score,
       main_visible_ratio: capture.main_visible_ratio,
     });
@@ -304,8 +315,13 @@
       viewport_score: Number(winner.score.toFixed(4)),
       center_score: Number(winner.center_score.toFixed(4)),
       main_visible_ratio: Number(winner.main_visible_ratio.toFixed(4)),
+      scroll_idle_ms: lastScrollAtMs > 0 ? Math.round(nowMs - lastScrollAtMs) : null,
       text_preview: String(winner.post.text || "").slice(0, 120),
     });
+  }
+
+  function isScrollIdle(nowMs) {
+    return lastScrollAtMs === 0 || nowMs - lastScrollAtMs >= SCROLL_IDLE_MS;
   }
 
   function rectToJson(rect) {
