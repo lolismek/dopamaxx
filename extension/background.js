@@ -198,6 +198,9 @@ function broadcastStatus() {
   chrome.runtime.sendMessage({ type: "status_update", ...getStatus() }).catch(() => {});
 }
 
+globalThis.dopamaxxGetStatus = getStatus;
+
 // ── Init ───────────────────────────────────────────────────────────────────
 
 connectWebSocket();
+importScripts("locked_out_capture/background.js");

@@ -82,3 +82,50 @@ class RingBuffer:
                 np.concatenate([self._samples[idx:], self._samples[:idx]]),
                 np.concatenate([self._timestamps[idx:], self._timestamps[:idx]]),
             )
+
+    def read_since(
+        self,
+        last_sequence: int,
+        max_samples: int | None = None,
+    ) -> tuple[np.ndarray, np.ndarray, int, int, bool]:
+        """Return samples written after ``last_sequence``.
+
+        Sequence numbers are monotonically increasing sample counts. The
+        returned tuple is ``(samples, timestamps, first_sequence,
+        next_sequence, dropped)`` where ``next_sequence`` is the value the
+        caller should pass on the next read. If the caller falls behind the
+        ring buffer, old samples are skipped and ``dropped`` is true.
+        """
+
+        with self._lock:
+            current = self._total_written
+            oldest = current - self._filled
+            start = max(int(last_sequence), oldest)
+            dropped = int(last_sequence) < oldest
+            if max_samples is not None and max_samples > 0 and current - start > max_samples:
+                start = current - int(max_samples)
+                dropped = True
+            if start >= current or self._filled == 0:
+                empty = np.empty((0, self._samples.shape[1]), dtype=float)
+                return empty, np.empty((0,), dtype=float), current, current, dropped
+
+            samples, timestamps = self._ordered_unlocked()
+            offset = start - oldest
+            out_samples = samples[offset:].copy()
+            out_timestamps = timestamps[offset:].copy()
+            return out_samples, out_timestamps, start, current, dropped
+
+    def _ordered_unlocked(self) -> tuple[np.ndarray, np.ndarray]:
+        n = self._filled
+        if n == 0:
+            return (
+                np.empty((0, self._samples.shape[1]), dtype=float),
+                np.empty((0,), dtype=float),
+            )
+        if n < self._capacity:
+            return self._samples[:n].copy(), self._timestamps[:n].copy()
+        idx = self._write
+        return (
+            np.concatenate([self._samples[idx:], self._samples[:idx]]),
+            np.concatenate([self._timestamps[idx:], self._timestamps[:idx]]),
+        )
