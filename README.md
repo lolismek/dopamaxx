@@ -552,3 +552,28 @@ RUN_TRIBEV2_INTEGRATION=1 python -m pytest tribev2_text/tests/test_integration.p
 | Supabase returns 401/403 | Use the publishable/anon key in Chrome and service-role key only on backend |
 | Embeddings stay pending or failed | Check the Edge Function `OPENAI_API_KEY` secret |
 | Microdose queue is empty | Seed Locked Out hits first or configure a Twitter/X MCP candidate source |
+
+## TRIBE v2 Upgrade Path
+
+Today, DopaMAXX can rank posts with normal text embeddings: embed the post,
+compare it to EEG-labeled hits and misses, then microdose the closest hits. The
+more accurate version replaces that text embedding layer with **TRIBE v2
+signatures**. Instead of asking "are these posts semantically similar?", each
+post is converted into a predicted neural activation signature, and candidates
+are compared in that brain-aligned space.
+
+EEG still supplies the live reward labels. When a user dwells on a post and the
+EEG reward proxy marks it as a hit, DopaMAXX stores the post's TRIBE v2
+signature in the user's hit set. Future candidates are then ranked by similarity
+to high-reward TRIBE signatures and distance from miss signatures. This should be
+better than generic embeddings because two posts may use different words while
+still producing similar neural responses.
+
+The fMRI/EEG connection is the reason this is plausible. fMRI gives high-spatial
+resolution, slower measurements of brain activity; EEG gives lower-spatial
+resolution, fast real-time measurements. They are not the same signal, but they
+are different views of the same underlying neural dynamics. Practically, that
+means both can be treated as high-dimensional response spaces with shared latent
+structure: TRIBE v2 provides a dense fMRI-style content representation, while
+DopaMAXX uses EEG as the online feedback signal that says which regions of that
+representation are rewarding for this specific user.
