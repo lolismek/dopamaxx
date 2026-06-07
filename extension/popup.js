@@ -1,70 +1,53 @@
-const modeTag    = document.getElementById("modeTag");
-const timerEl    = document.getElementById("timer");
-const eegBadge   = document.getElementById("eegBadge");
-const eegLabel   = document.getElementById("eegLabel");
+const modeName   = document.getElementById("modeName");
+const timerVal   = document.getElementById("timerVal");
 const focusVal   = document.getElementById("focusVal");
 const rewardVal  = document.getElementById("rewardVal");
+const eegDot     = document.getElementById("eegDot");
+const eegTxt     = document.getElementById("eegTxt");
 const switchBtn  = document.getElementById("switchBtn");
 const demoToggle = document.getElementById("demoToggle");
-const demoText   = document.getElementById("demoText");
-const demoNote   = document.getElementById("demoNote");
 
-function fmt(seconds) {
-  if (seconds == null || seconds === 0) return "--:--";
-  const m = Math.floor(seconds / 60).toString().padStart(2, "0");
-  const s = (seconds % 60).toString().padStart(2, "0");
-  return `${m}:${s}`;
+function fmt(s) {
+  if (!s) return "--:--";
+  return `${Math.floor(s/60).toString().padStart(2,"0")}:${(s%60).toString().padStart(2,"0")}`;
 }
 
-function applyStatus(s) {
-  const isLockedIn = s.mode === "locked_in";
+function render(s) {
+  const locked = s.mode === "locked_in";
 
-  modeTag.textContent = isLockedIn ? "LOCKED IN" : "LOCKED OUT";
-  modeTag.className   = "mode-tag " + (isLockedIn ? "locked-in" : "locked-out");
+  modeName.textContent = locked ? "Locked In" : "Locked Out";
+  modeName.className   = "mode-name" + (locked ? " active" : "");
 
-  timerEl.textContent = fmt(s.timerSeconds);
-  timerEl.className   = "timer" + (s.timerSeconds ? "" : " dim");
-
-  if (s.wsConnected) {
-    eegBadge.className = "eeg-badge live";
-    eegLabel.textContent = "EEG LIVE";
-  } else {
-    eegBadge.className = "eeg-badge";
-    eegLabel.textContent = "EEG OFFLINE";
-  }
+  timerVal.textContent = fmt(s.timerSeconds);
+  timerVal.className   = "metric-val" + (s.timerSeconds ? "" : " dim");
 
   focusVal.textContent  = s.focusScore  != null ? s.focusScore.toFixed(2)  : "—";
+  focusVal.className    = "metric-val" + (s.focusScore  != null ? "" : " dim");
   rewardVal.textContent = s.rewardScore != null ? s.rewardScore.toFixed(2) : "—";
+  rewardVal.className   = "metric-val" + (s.rewardScore != null ? "" : " dim");
+
+  eegDot.className = "live-dot" + (s.wsConnected ? " on" : "");
+  eegTxt.textContent = s.wsConnected ? "live" : "offline";
 
   demoToggle.checked  = s.demoMode;
-  demoText.textContent = s.demoMode ? "ON" : "OFF";
-  switchBtn.disabled   = !s.demoMode;
+  switchBtn.disabled  = !s.demoMode;
 
   if (s.demoMode) {
-    switchBtn.textContent = isLockedIn ? "SWITCH TO LOCKED OUT" : "SWITCH TO LOCKED IN";
-    switchBtn.className   = "switch-btn " + (isLockedIn ? "to-locked-out" : "to-locked-in");
-    demoNote.textContent  = "eeg signals ignored — manual override active";
+    switchBtn.textContent = locked ? "Switch to Locked Out" : "Switch to Locked In";
+    switchBtn.className   = "btn armed";
   } else {
-    switchBtn.textContent = isLockedIn ? "SWITCH TO LOCKED OUT" : "SWITCH TO LOCKED IN";
-    switchBtn.className   = "switch-btn";
-    demoNote.textContent  = "enable demo mode to override eeg transitions";
+    switchBtn.textContent = "Switch Mode";
+    switchBtn.className   = "btn";
   }
 }
 
-chrome.runtime.sendMessage({ type: "get_status" }, (s) => { if (s) applyStatus(s); });
-
-chrome.runtime.onMessage.addListener((msg) => {
-  if (msg.type === "status_update") applyStatus(msg);
-});
+chrome.runtime.sendMessage({ type: "get_status" }, (s) => { if (s) render(s); });
+chrome.runtime.onMessage.addListener((msg) => { if (msg.type === "status_update") render(msg); });
 
 demoToggle.addEventListener("change", () => {
-  chrome.runtime.sendMessage({ type: "set_demo_mode", enabled: demoToggle.checked }, (s) => {
-    if (s) applyStatus(s);
-  });
+  chrome.runtime.sendMessage({ type: "set_demo_mode", enabled: demoToggle.checked }, (s) => { if (s) render(s); });
 });
 
 switchBtn.addEventListener("click", () => {
-  chrome.runtime.sendMessage({ type: "demo_toggle_mode" }, (s) => {
-    if (s) applyStatus(s);
-  });
+  chrome.runtime.sendMessage({ type: "demo_toggle_mode" }, (s) => { if (s) render(s); });
 });
