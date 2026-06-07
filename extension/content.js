@@ -11,22 +11,19 @@ function showLockedInBanner() {
     left: "0",
     right: "0",
     zIndex: "2147483647",
-    background: "rgba(0,0,0,0.45)",
-    backdropFilter: "blur(12px) saturate(1.4)",
-    webkitBackdropFilter: "blur(12px) saturate(1.4)",
-    color: "rgba(255,255,255,0.65)",
-    fontSize: "10px",
+    background: "#e8560a",
+    color: "rgba(255,255,255,0.9)",
+    fontSize: "9px",
     fontFamily: "-apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif",
     fontWeight: "600",
-    letterSpacing: "0.16em",
+    letterSpacing: "0.18em",
     textTransform: "uppercase",
     textAlign: "center",
-    padding: "7px 12px",
+    padding: "3px 12px",
     pointerEvents: "none",
     userSelect: "none",
-    borderBottom: "1px solid rgba(255,255,255,0.08)",
   });
-  banner.textContent = "DopaMAXX — Locked In";
+  banner.textContent = "Locked In";
   document.documentElement.appendChild(banner);
 }
 
