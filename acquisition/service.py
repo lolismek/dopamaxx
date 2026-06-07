@@ -18,6 +18,7 @@ from acquisition.bridge import BridgeProcess, build_bridge_command
 from acquisition.config import BridgeConfigError, require_port, resolve_bridge_path
 from acquisition.frames import FrameMetadata, build_eeg_frame, status_frame
 from acquisition.lsl import LSLReader, health_check_inlet, wait_for_stream_inlet
+from acquisition.raw_stream import encode_raw_frame, hello_message
 from acquisition.simulator import SineWaveSimulator
 from acquisition.spec import CHANNEL_LABELS, HEALTH_DEFAULTS, SAMPLE_RATE_HZ, STREAM_NAME
 
@@ -162,6 +163,12 @@ class AcquisitionRuntime:
             )
         return build_eeg_frame(self.reader.ring, metadata=meta, window_s=self.config.window_s)
 
+    def raw_stream_metadata(self) -> dict:
+        return self.metadata() | {
+            "recommended_url": "/stream/raw",
+            "json_fallback_url": "/stream/raw-json",
+        }
+
     def inject(self, request: InjectionRequest) -> dict:
         if self.simulator is None:
             raise HTTPException(
@@ -236,6 +243,10 @@ def create_app(runtime: AcquisitionRuntime) -> FastAPI:
     def metadata() -> dict:
         return runtime.metadata()
 
+    @app.get("/stream/raw-info")
+    def raw_info() -> dict:
+        return hello_message(runtime.raw_stream_metadata())
+
     @app.post("/sim/inject")
     def inject(request: InjectionRequest) -> dict:
         return runtime.inject(request)
@@ -250,7 +261,108 @@ def create_app(runtime: AcquisitionRuntime) -> FastAPI:
         except WebSocketDisconnect:
             return
 
+    @app.websocket("/stream/raw")
+    async def raw_stream(websocket: WebSocket) -> None:
+        await websocket.accept()
+        query = websocket.query_params
+        max_samples = _bounded_int(query.get("max_samples"), default=256, low=1, high=4096)
+        poll_ms = _bounded_float(query.get("poll_ms"), default=2.0, low=1.0, high=100.0)
+        replay = query.get("replay", "0") in {"1", "true", "yes"}
+        await websocket.send_json(hello_message(runtime.raw_stream_metadata()))
+        try:
+            reader = runtime.reader
+            if reader is None:
+                await websocket.close(code=1013, reason="acquisition not connected")
+                return
+            last_sequence = 0 if replay else reader.ring.total_written
+            while True:
+                reader = runtime.reader
+                if reader is None:
+                    await websocket.close(code=1013, reason="acquisition stopped")
+                    return
+                samples, ts, first_sequence, next_sequence, dropped = reader.ring.read_since(
+                    last_sequence,
+                    max_samples=max_samples,
+                )
+                if samples.shape[0] > 0:
+                    payload = encode_raw_frame(
+                        samples,
+                        ts,
+                        stream_name=runtime.config.stream_name,
+                        channel_labels=reader.channel_labels,
+                        sample_rate_hz=reader.sample_rate_hz,
+                        first_sequence=first_sequence,
+                        next_sequence=next_sequence,
+                        dropped=dropped,
+                    )
+                    await websocket.send_bytes(payload)
+                    last_sequence = next_sequence
+                else:
+                    last_sequence = next_sequence
+                    await asyncio.sleep(poll_ms / 1000.0)
+        except WebSocketDisconnect:
+            return
+
+    @app.websocket("/stream/raw-json")
+    async def raw_json_stream(websocket: WebSocket) -> None:
+        await websocket.accept()
+        query = websocket.query_params
+        max_samples = _bounded_int(query.get("max_samples"), default=64, low=1, high=512)
+        poll_ms = _bounded_float(query.get("poll_ms"), default=10.0, low=2.0, high=250.0)
+        replay = query.get("replay", "0") in {"1", "true", "yes"}
+        try:
+            reader = runtime.reader
+            if reader is None:
+                await websocket.close(code=1013, reason="acquisition not connected")
+                return
+            last_sequence = 0 if replay else reader.ring.total_written
+            while True:
+                reader = runtime.reader
+                if reader is None:
+                    await websocket.close(code=1013, reason="acquisition stopped")
+                    return
+                samples, ts, first_sequence, next_sequence, dropped = reader.ring.read_since(
+                    last_sequence,
+                    max_samples=max_samples,
+                )
+                if samples.shape[0] > 0:
+                    await websocket.send_json(
+                        {
+                            "type": "raw_eeg_chunk",
+                            "stream_name": runtime.config.stream_name,
+                            "channel_labels": list(reader.channel_labels),
+                            "sample_rate_hz": reader.sample_rate_hz,
+                            "first_sequence": first_sequence,
+                            "next_sequence": next_sequence,
+                            "dropped": dropped,
+                            "timestamps": ts.tolist(),
+                            "samples": samples.tolist(),
+                        }
+                    )
+                    last_sequence = next_sequence
+                else:
+                    last_sequence = next_sequence
+                    await asyncio.sleep(poll_ms / 1000.0)
+        except WebSocketDisconnect:
+            return
+
     return app
+
+
+def _bounded_int(raw: str | None, *, default: int, low: int, high: int) -> int:
+    try:
+        value = int(raw) if raw is not None else default
+    except ValueError:
+        value = default
+    return max(low, min(high, value))
+
+
+def _bounded_float(raw: str | None, *, default: float, low: float, high: float) -> float:
+    try:
+        value = float(raw) if raw is not None else default
+    except ValueError:
+        value = default
+    return max(low, min(high, value))
 
 
 def _dashboard_html() -> str:
