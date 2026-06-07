@@ -25,7 +25,7 @@ let state = {
 
 // ── WebSocket ──────────────────────────────────────────────────────────────
 
-const WS_URL = "ws://localhost:8765";
+const WS_URL = "ws://localhost:8000/stream/eeg";
 const WS_RETRY_MS = 3000;
 
 function connectWebSocket() {
@@ -59,7 +59,11 @@ function connectWebSocket() {
 }
 
 function handleBackendMessage(msg) {
-  if (state.demoMode) return; // demo mode ignores backend signals
+  // EEG frames from the acquisition service (msg has .samples, .channel_labels, etc.)
+  // Just keep the connection alive for now; mode changes come from the signal
+  // processing layer which sends { type: "mode_change", mode: "locked_in"|"locked_out" }
+  // or { type: "timer_update", seconds_remaining: N }.
+  if (state.demoMode) return;
 
   if (msg.type === "mode_change") {
     setMode(msg.mode);
@@ -67,6 +71,7 @@ function handleBackendMessage(msg) {
     state.timerSeconds = msg.seconds_remaining;
     broadcastStatus();
   }
+  // EEG frames (no .type) are silently consumed — connection staying alive is enough.
 }
 
 // ── Mode management ────────────────────────────────────────────────────────
