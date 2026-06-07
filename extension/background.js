@@ -19,6 +19,8 @@ let state = {
   workTabId: null,
   demoMode: false,
   timerSeconds: 0,
+  focusScore: null,
+  rewardScore: null,
   ws: null,
   wsConnected: false,
 };
@@ -69,6 +71,10 @@ function handleBackendMessage(msg) {
     setMode(msg.mode);
   } else if (msg.type === "timer_update") {
     state.timerSeconds = msg.seconds_remaining;
+    broadcastStatus();
+  } else if (msg.type === "scores_update") {
+    state.focusScore  = msg.focus_score  ?? state.focusScore;
+    state.rewardScore = msg.reward_score ?? state.rewardScore;
     broadcastStatus();
   }
   // EEG frames (no .type) are silently consumed — connection staying alive is enough.
@@ -182,6 +188,8 @@ function getStatus() {
     demoMode: state.demoMode,
     wsConnected: state.wsConnected,
     timerSeconds: state.timerSeconds,
+    focusScore: state.focusScore,
+    rewardScore: state.rewardScore,
     workTabId: state.workTabId,
   };
 }
