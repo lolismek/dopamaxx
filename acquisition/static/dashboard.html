@@ -5,224 +5,336 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>DopaMAXX Acquisition</title>
   <style>
+    /* ── BRAUN / DIETER RAMS ─────────────────────────────────────────────────
+       Less, but better. No decoration — every pixel carries meaning.
+       Warm cream field, near-black ink, one purposeful orange accent.
+       Instrument displays: dark with phosphor, housed in cream panels.
+    ── */
     :root {
-      --bg: #0c0e10;
-      --panel: #131619;
-      --panel-2: #1a1f24;
-      --text: #f0f4f7;
-      --muted: #8a97a3;
-      --line: #252e36;
-      --accent: #35d6aa;
-      --warn: #f5c842;
-      --bad: #ff5f5f;
-      --blue: #6eaaff;
-      --purple: #b48cff;
-      --orange: #ff9a45;
-      --ecg: #ff6b9d;
-      --emg: #f5c842;
-      --sidebar: 300px;
+      --bg:       #E4E1DA;   /* Braun cream chassis                  */
+      --panel:    #F2F0EB;   /* panel face                           */
+      --panel-2:  #E9E6DF;   /* recessed panel head                  */
+      --surface:  #FAFAF8;   /* form element surface                 */
+      --text:     #161412;   /* near-black ink                       */
+      --sub:      #6A6660;   /* secondary label                      */
+      --line:     #C4C0B8;   /* separator / border                   */
+      --accent:   #C84E14;   /* Braun signal orange — use sparingly  */
+      --good:     #1A6830;   /* confirmed-OK green                   */
+      --warn:     #8C6010;   /* amber caution                        */
+      --bad:      #9A1A14;   /* fault red                            */
+      --scope-bg: #0C0C0A;   /* phosphor display background          */
+      --ph-eeg:   #1DB954;   /* phosphor green  — EEG               */
+      --ph-emg:   #C89820;   /* phosphor amber  — EMG               */
+      --ph-ecg:   #C83232;   /* phosphor red    — ECG               */
+      --sidebar:  300px;
     }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { background: var(--bg); }
 
     body {
       min-height: 100vh;
       background: var(--bg);
       color: var(--text);
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      font-family: "Helvetica Neue", Helvetica, Arial, ui-sans-serif, sans-serif;
       font-size: 13px;
+      font-variant-numeric: tabular-nums;
+      -webkit-font-smoothing: antialiased;
     }
 
     main {
-      width: min(1800px, calc(100vw - 16px));
+      width: min(1800px, calc(100vw - 20px));
       margin: 0 auto;
-      padding: 14px 0 28px;
+      padding: 18px 0 32px;
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 12px;
     }
 
     /* ── HEADER ── */
     header {
       display: flex;
-      align-items: center;
+      align-items: baseline;
       justify-content: space-between;
-      gap: 12px;
+      gap: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--line);
     }
-    h1 { font-size: 19px; font-weight: 700; letter-spacing: -0.01em; }
+
+    h1 {
+      font-size: 14px;
+      font-weight: 400;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--text);
+    }
 
     .status-row {
-      display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
-      justify-content: flex-end;
+      display: flex; gap: 8px; align-items: center;
+      flex-wrap: wrap; justify-content: flex-end;
     }
+
+    /* Braun badge: rectangular pill, no radius, bordered */
     .badge {
-      display: inline-flex; align-items: center; gap: 5px;
-      border: 1px solid var(--line); border-radius: 5px;
-      padding: 3px 8px; color: var(--muted); background: var(--panel);
-      font-size: 12px; white-space: nowrap;
+      display: inline-flex; align-items: center;
+      border: 1px solid var(--line);
+      padding: 2px 7px;
+      color: var(--sub);
+      background: var(--panel);
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      white-space: nowrap;
+      border-radius: 0;
     }
-    .badge.good  { color: var(--accent); border-color: rgba(53,214,170,.3); }
-    .badge.warn  { color: var(--warn);   border-color: rgba(245,200,66,.3); }
-    .badge.bad   { color: var(--bad);    border-color: rgba(255,95,95,.3);  }
-    .badge.blue  { color: var(--blue);   border-color: rgba(110,170,255,.3);}
+    .badge.good { color: var(--good); border-color: var(--good); }
+    .badge.warn { color: var(--warn); border-color: var(--warn); }
+    .badge.bad  { color: var(--bad);  border-color: var(--bad);  }
+    .badge.hi   { color: var(--accent); border-color: var(--accent); }
 
     /* ── METRIC CARDS ROW ── */
     .metrics-row {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0,1fr));
-      gap: 10px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 1px;
+      background: var(--line);
+      border: 1px solid var(--line);
     }
+
     .metric-card {
       background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 12px 14px 13px;
+      padding: 14px 16px 16px;
     }
-    .metric-card .mc-label {
-      font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
-      color: var(--muted); margin-bottom: 6px;
+
+    .mc-label {
+      font-size: 10px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--sub);
+      margin-bottom: 10px;
     }
-    .metric-card .mc-value {
-      font-size: 28px; font-weight: 700; line-height: 1;
-      margin-bottom: 5px;
+
+    .mc-value {
+      font-size: 34px;
+      font-weight: 300;
+      line-height: 1;
+      letter-spacing: -0.01em;
+      color: var(--text);
+      margin-bottom: 8px;
     }
-    .metric-card .mc-sub {
-      font-size: 11px; color: var(--muted);
+
+    /* Braun progress track: thin, rectangular, no radius */
+    .mc-track {
+      height: 3px;
+      background: var(--line);
+      margin-bottom: 8px;
     }
-    .metric-card .mc-bar {
-      margin-top: 8px; height: 5px; border-radius: 999px;
-      background: var(--line); overflow: hidden;
+    .mc-fill {
+      height: 100%;
+      background: var(--accent);
+      transition: width 0.25s linear;
     }
-    .metric-card .mc-bar-fill {
-      height: 100%; border-radius: inherit;
-      background: var(--accent); transition: width .2s linear;
+
+    .mc-sub {
+      font-size: 11px;
+      color: var(--sub);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
     }
 
     /* ── MAIN GRID ── */
     .main-grid {
       display: grid;
       grid-template-columns: var(--sidebar) minmax(0,1fr) var(--sidebar);
-      gap: 10px;
+      gap: 12px;
       align-items: start;
     }
 
-    .col { display: flex; flex-direction: column; gap: 10px; }
+    .col { display: flex; flex-direction: column; gap: 12px; }
 
-    /* ── PANELS ── */
+    /* ── PANELS ─────────────────────────────────────────────────────────────
+       Braun: all panels share the same border, no radius, flat surfaces.
+    ── */
     section {
       background: var(--panel);
       border: 1px solid var(--line);
-      border-radius: 8px;
+      border-radius: 0;
       overflow: hidden;
     }
+
     .panel-head {
-      display: flex; justify-content: space-between; align-items: center;
-      gap: 10px; padding: 9px 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
       border-bottom: 1px solid var(--line);
       background: var(--panel-2);
     }
-    .panel-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
-    .panel-tag   { font-size: 11px; color: var(--muted); }
+
+    .panel-title {
+      font-size: 10px;
+      font-weight: 400;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--sub);
+    }
+
+    .panel-tag {
+      font-size: 10px;
+      color: var(--sub);
+      letter-spacing: 0.04em;
+    }
 
     /* ── CANVAS WRAPPERS ── */
-    .canvas-wrap {
-      padding: 8px 10px 10px;
-      background: #0a0c0e;
+    /* Oscilloscope housing: cream exterior, dark interior */
+    .scope-wrap {
+      padding: 10px;
+      background: var(--panel-2);
     }
-    canvas { width: 100%; display: block; border-radius: 4px; background: transparent; }
 
-    /* ── SCORES CHART ── */
-    .scores-canvas  { height: 130px; }
-    /* ── BANDS CHART ── */
-    .bands-canvas   { height: 100px; }
-    /* ── POSTURE EMG CHART (processed) ── */
-    .emg-chart-canvas  { height: 90px; }
-    /* ── ECG CONTEXT CHART ── */
-    .ecg-ctx-canvas { height: 90px; }
-
-    /* ── RAW EEG MONITOR ── */
-    .raw-eeg-canvas {
-      height: clamp(420px, 50vh, 640px);
+    /* Chart panels use light background (paper-like) */
+    .chart-wrap {
+      padding: 0;
+      background: var(--surface);
     }
-    /* ── RAW POSTURE EMG MONITOR ── */
-    .raw-emg-canvas { height: 160px; }
-    /* ── RAW ECG MONITOR ── */
-    .raw-ecg-canvas { height: 120px; }
 
-    /* ── TOPOMAP ── */
-    .topo-canvas { aspect-ratio: 1/1; }
-
-    /* ── KV LIST ── */
-    .kv { display: grid; gap: 0; font-size: 12px; }
-    .kv div {
-      display: flex; justify-content: space-between; gap: 12px;
-      padding: 6px 12px; border-bottom: 1px solid rgba(37,46,54,.7);
+    canvas {
+      width: 100%;
+      display: block;
+      background: transparent;
     }
-    .kv div:last-child { border-bottom: none; }
-    .kv span { color: var(--muted); }
-    .kv strong { text-align: right; font-weight: 600; }
 
-    /* ── INFERENCE BODY ── */
-    .inference-body { padding: 10px 12px 12px; display: grid; gap: 10px; }
+    /* Canvas height constraints */
+    .h-eeg    { height: clamp(420px, 50vh, 640px); }
+    .h-emg    { height: 160px; }
+    .h-ecg    { height: 120px; }
+    .h-scores { height: 130px; }
+    .h-bands  { height: 110px; }
+    .h-emgch  { height: 90px; }
+    .h-ecgctx { height: 90px; }
+    .h-topo   { aspect-ratio: 1/1; }
+
+    /* ── KV TABLE ── */
+    .kv { font-size: 12px; }
+    .kv-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 12px;
+      padding: 6px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    .kv-row:last-child { border-bottom: none; }
+    .kv-key { color: var(--sub); letter-spacing: 0.04em; }
+    .kv-val { font-weight: 500; text-align: right; }
+
+    /* ── INFERENCE ── */
+    .inference-body {
+      padding: 12px;
+      display: grid;
+      gap: 12px;
+    }
+
     .score-block { display: grid; gap: 5px; }
+
     .score-line {
-      display: flex; align-items: center; justify-content: space-between;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
       font-size: 12px;
     }
-    .score-line span { color: var(--muted); }
+    .score-line .slk { color: var(--sub); letter-spacing: 0.04em; }
+
+    /* Braun progress bar: flat, rectangular */
     .bar {
-      height: 8px; border-radius: 999px; background: #0a0c0e;
-      border: 1px solid var(--line); overflow: hidden; position: relative;
+      height: 4px;
+      background: var(--line);
+      position: relative;
+      overflow: hidden;
     }
     .bar-fill {
-      width: 0%; height: 100%; border-radius: inherit;
-      background: var(--accent); transition: width .18s linear;
+      width: 0%; height: 100%;
+      background: var(--accent);
+      transition: width 0.2s linear;
     }
     .reward-bar .bar-fill {
-      margin-left: 50%; width: 0%; transform-origin: left center;
-      background: var(--warn);
+      margin-left: 50%;
+      width: 0%;
+      transform-origin: left center;
     }
 
     /* ── SIM CONTROLS ── */
     .controls {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
-      padding: 10px 12px 12px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1px;
+      background: var(--line);
+      padding: 0;
+      margin: 12px;
+      border: 1px solid var(--line);
     }
+
     button {
-      min-height: 32px; border: 1px solid var(--line); border-radius: 5px;
-      color: var(--text); background: #0e1114; font: inherit; font-size: 12px;
-      cursor: pointer; transition: border-color .12s;
+      min-height: 34px;
+      border: none;
+      color: var(--text);
+      background: var(--surface);
+      font: inherit;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: background 0.08s;
+      border-radius: 0;
     }
-    button:hover { border-color: var(--blue); background: #13191e; }
-    .sim-msg { padding: 0 12px 10px; color: var(--muted); font-size: 12px; min-height: 28px; }
+    button:hover { background: var(--panel-2); color: var(--accent); }
 
-    /* ── SCROLLBAR ── */
-    ::-webkit-scrollbar { width: 6px; }
-    ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: var(--line); border-radius: 99px; }
-
-    @media (max-width: 1100px) {
-      :root { --sidebar: 260px; }
+    .sim-msg {
+      padding: 0 12px 12px;
+      color: var(--sub);
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      min-height: 26px;
     }
+
+    /* ── STATUS MESSAGE ── */
+    .status-msg {
+      padding: 8px 12px;
+      font-size: 11px;
+      color: var(--sub);
+      min-height: 24px;
+      border-top: 1px solid var(--line);
+    }
+
+    /* ── SCROLLBAR (minimal, Braun-like) ── */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--line); }
+
+    @media (max-width: 1100px) { :root { --sidebar: 260px; } }
     @media (max-width: 800px) {
       .main-grid { grid-template-columns: 1fr; }
       .metrics-row { grid-template-columns: 1fr 1fr; }
     }
-    @media (max-width: 420px) {
+    @media (max-width: 480px) {
       .metrics-row { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
 <main>
+
   <!-- ── HEADER ── -->
   <header>
-    <h1>DopaMAXX Acquisition</h1>
+    <h1>DopaMAXX&nbsp;&nbsp;Acquisition</h1>
     <div class="status-row">
       <span id="sourceBadge" class="badge">source</span>
       <span id="statusBadge" class="badge">starting</span>
       <span id="streamBadge" class="badge">DSI24-EEG</span>
-      <span id="rateBadge"   class="badge blue" title="EEG sample rate">— Hz</span>
-      <span id="hrBadge"     class="badge" title="Heart rate (simulated)">♥ — BPM</span>
+      <span id="rateBadge"   class="badge" title="EEG sample rate">— Hz</span>
+      <span id="hrBadge"     class="badge" title="Heart rate (simulated)">♥ — bpm</span>
     </div>
   </header>
 
@@ -230,34 +342,34 @@
   <div class="metrics-row">
     <div class="metric-card">
       <div class="mc-label">Focus</div>
-      <div class="mc-value" id="mcFocus" style="color:var(--accent)">—</div>
-      <div class="mc-bar"><div class="mc-bar-fill" id="mcFocusBar" style="background:var(--accent)"></div></div>
-      <div class="mc-sub" id="mcFocusMood">waiting…</div>
+      <div class="mc-value" id="mcFocus">—</div>
+      <div class="mc-track"><div class="mc-fill" id="mcFocusBar"></div></div>
+      <div class="mc-sub"  id="mcFocusMood">—</div>
     </div>
     <div class="metric-card">
       <div class="mc-label">Fatigue</div>
-      <div class="mc-value" id="mcFatigue" style="color:var(--warn)">—</div>
-      <div class="mc-bar"><div class="mc-bar-fill" id="mcFatigueBar" style="background:var(--warn)"></div></div>
-      <div class="mc-sub" id="mcFatigueMood">waiting…</div>
+      <div class="mc-value" id="mcFatigue">—</div>
+      <div class="mc-track"><div class="mc-fill" id="mcFatigueBar"></div></div>
+      <div class="mc-sub"  id="mcFatigueMood">—</div>
     </div>
     <div class="metric-card">
-      <div class="mc-label">EMG Strain <span style="font-size:10px;color:var(--muted)">(sim)</span></div>
-      <div class="mc-value" id="mcEMG" style="color:var(--emg)">—</div>
-      <div class="mc-bar"><div class="mc-bar-fill" id="mcEMGBar" style="background:var(--emg)"></div></div>
-      <div class="mc-sub" id="mcEMGMood">waiting…</div>
+      <div class="mc-label">EMG Strain&ensp;<span style="font-weight:300;font-size:10px">(sim)</span></div>
+      <div class="mc-value" id="mcEMG">—</div>
+      <div class="mc-track"><div class="mc-fill" id="mcEMGBar"></div></div>
+      <div class="mc-sub"  id="mcEMGMood">—</div>
     </div>
     <div class="metric-card">
       <div class="mc-label">Signal Quality</div>
-      <div class="mc-value" id="mcQuality" style="color:var(--accent)">—</div>
-      <div class="mc-bar"><div class="mc-bar-fill" id="mcQualityBar"></div></div>
-      <div class="mc-sub" id="mcQualitySub">flat: 0 · clipping: 0</div>
+      <div class="mc-value" id="mcQuality">—</div>
+      <div class="mc-track"><div class="mc-fill" id="mcQualityBar"></div></div>
+      <div class="mc-sub"  id="mcQualitySub">flat: 0 · clipping: 0</div>
     </div>
   </div>
 
   <!-- ── MAIN GRID ── -->
   <div class="main-grid">
 
-    <!-- LEFT COLUMN: time-series charts -->
+    <!-- ── LEFT COLUMN ── -->
     <div class="col">
 
       <section>
@@ -265,8 +377,8 @@
           <div class="panel-title">Scores</div>
           <div class="panel-tag">focus · reward · 60 s</div>
         </div>
-        <div class="canvas-wrap">
-          <canvas id="scoresChart" class="scores-canvas"></canvas>
+        <div class="chart-wrap">
+          <canvas id="scoresChart" class="h-scores"></canvas>
         </div>
       </section>
 
@@ -275,8 +387,8 @@
           <div class="panel-title">EEG Bands</div>
           <span id="dominantBandBadge" class="badge">—</span>
         </div>
-        <div class="canvas-wrap">
-          <canvas id="bandsChart" class="bands-canvas"></canvas>
+        <div class="chart-wrap">
+          <canvas id="bandsChart" class="h-bands"></canvas>
         </div>
       </section>
 
@@ -285,8 +397,8 @@
           <div class="panel-title">Posture EMG</div>
           <div class="panel-tag">envelope · 30 s · sim</div>
         </div>
-        <div class="canvas-wrap">
-          <canvas id="emgChart" class="emg-chart-canvas"></canvas>
+        <div class="chart-wrap">
+          <canvas id="emgChart" class="h-emgch"></canvas>
         </div>
       </section>
 
@@ -295,12 +407,11 @@
           <div class="panel-title">ECG Context</div>
           <div class="panel-tag">HR trend · 60 s · sim</div>
         </div>
-        <div class="canvas-wrap">
-          <canvas id="ecgCtxChart" class="ecg-ctx-canvas"></canvas>
+        <div class="chart-wrap">
+          <canvas id="ecgCtxChart" class="h-ecgctx"></canvas>
         </div>
       </section>
 
-      <!-- Live Inference detail -->
       <section>
         <div class="panel-head">
           <div class="panel-title">Live Inference</div>
@@ -308,41 +419,53 @@
         </div>
         <div class="inference-body">
           <div class="score-block">
-            <div class="score-line"><span>Focus</span><strong id="focusScore">n/a</strong></div>
+            <div class="score-line">
+              <span class="slk">Focus</span>
+              <strong id="focusScore">n/a</strong>
+            </div>
             <div class="bar"><div id="focusFill" class="bar-fill"></div></div>
-            <div class="score-line"><span>Mood</span><strong id="focusMood">unknown</strong></div>
+            <div class="score-line">
+              <span class="slk">Mood</span>
+              <span id="focusMood">—</span>
+            </div>
           </div>
           <div class="score-block">
-            <div class="score-line"><span>Reward</span><strong id="rewardScore">n/a</strong></div>
+            <div class="score-line">
+              <span class="slk">Reward</span>
+              <strong id="rewardScore">n/a</strong>
+            </div>
             <div class="bar reward-bar"><div id="rewardFill" class="bar-fill"></div></div>
-            <div class="score-line"><span>Verdict</span><strong id="rewardMood">unknown</strong></div>
+            <div class="score-line">
+              <span class="slk">Verdict</span>
+              <span id="rewardMood">—</span>
+            </div>
           </div>
         </div>
         <div class="kv">
-          <div><span>Dominant band</span><strong id="dominantBand">—</strong></div>
-          <div><span>Engagement idx</span><strong id="engagementIndex">—</strong></div>
-          <div><span>Frontal alpha</span><strong id="frontalAlpha">—</strong></div>
-          <div><span>FAA</span><strong id="alphaAsymmetry">—</strong></div>
-          <div><span>Rel θ / α / β</span><strong id="relBands">—</strong></div>
+          <div class="kv-row"><span class="kv-key">Dominant band</span><span class="kv-val" id="dominantBand">—</span></div>
+          <div class="kv-row"><span class="kv-key">Engagement idx</span><span class="kv-val" id="engagementIndex">—</span></div>
+          <div class="kv-row"><span class="kv-key">Frontal alpha</span><span class="kv-val" id="frontalAlpha">—</span></div>
+          <div class="kv-row"><span class="kv-key">FAA</span><span class="kv-val" id="alphaAsymmetry">—</span></div>
+          <div class="kv-row"><span class="kv-key">Rel θ / α / β</span><span class="kv-val" id="relBands">—</span></div>
         </div>
       </section>
 
     </div>
 
-    <!-- CENTER COLUMN: raw monitors -->
+    <!-- ── CENTER COLUMN ── -->
     <div class="col">
 
       <section>
         <div class="panel-head">
           <div class="panel-title">Raw EEG Monitor</div>
           <div style="display:flex;gap:6px">
-            <span id="channelCount" class="badge">19 ch</span>
+            <span id="channelCount"  class="badge">19 ch</span>
             <span id="bufferedBadge" class="badge">0 smp</span>
-            <span id="ageBadge" class="badge">— ms</span>
+            <span id="ageBadge"      class="badge">— ms</span>
           </div>
         </div>
-        <div class="canvas-wrap">
-          <canvas id="scopeEEG" class="raw-eeg-canvas"></canvas>
+        <div class="scope-wrap">
+          <canvas id="scopeEEG" class="h-eeg"></canvas>
         </div>
       </section>
 
@@ -354,8 +477,8 @@
             <span class="badge">4 ch · 1 kHz</span>
           </div>
         </div>
-        <div class="canvas-wrap">
-          <canvas id="scopeEMG" class="raw-emg-canvas"></canvas>
+        <div class="scope-wrap">
+          <canvas id="scopeEMG" class="h-emg"></canvas>
         </div>
       </section>
 
@@ -364,17 +487,17 @@
           <div class="panel-title">Raw ECG Monitor</div>
           <div style="display:flex;gap:6px">
             <span class="badge warn">simulated</span>
-            <span id="ecgRateBadge" class="badge ecg-badge">— BPM</span>
+            <span id="ecgRateBadge" class="badge">— bpm</span>
           </div>
         </div>
-        <div class="canvas-wrap">
-          <canvas id="scopeECG" class="raw-ecg-canvas"></canvas>
+        <div class="scope-wrap">
+          <canvas id="scopeECG" class="h-ecg"></canvas>
         </div>
       </section>
 
     </div>
 
-    <!-- RIGHT COLUMN: brain map + status -->
+    <!-- ── RIGHT COLUMN ── -->
     <div class="col">
 
       <section>
@@ -382,8 +505,8 @@
           <div class="panel-title">EEG Brain Map</div>
           <span id="topoScale" class="badge">activity</span>
         </div>
-        <div class="canvas-wrap" style="padding:10px;">
-          <canvas id="topomap" class="topo-canvas"></canvas>
+        <div class="scope-wrap">
+          <canvas id="topomap" class="h-topo"></canvas>
         </div>
       </section>
 
@@ -392,19 +515,19 @@
           <div class="panel-title">Stream / Status</div>
         </div>
         <div class="kv">
-          <div><span>Stream name</span><strong id="streamName">DSI24-EEG</strong></div>
-          <div><span>Sample rate</span><strong id="sampleRate">300 Hz</strong></div>
-          <div><span>Channels</span><strong id="channelCountKV">19</strong></div>
-          <div><span>Buffer samples</span><strong id="bufferSamples">—</strong></div>
-          <div><span>Window</span><strong id="windowS">—</strong></div>
-          <div><span>Frame samples</span><strong id="frameSamples">—</strong></div>
-          <div><span>Latest age</span><strong id="latestAge">—</strong></div>
-          <div><span>Effective rate</span><strong id="effectiveRate">—</strong></div>
-          <div><span>Flat channels</span><strong id="flatChannels">0</strong></div>
-          <div><span>Clipping flags</span><strong id="clipChannels">0</strong></div>
-          <div><span>Source mode</span><strong id="sourceMode">—</strong></div>
+          <div class="kv-row"><span class="kv-key">Stream name</span>   <span class="kv-val" id="streamName">—</span></div>
+          <div class="kv-row"><span class="kv-key">Sample rate</span>    <span class="kv-val" id="sampleRate">—</span></div>
+          <div class="kv-row"><span class="kv-key">Channels</span>       <span class="kv-val" id="channelCountKV">—</span></div>
+          <div class="kv-row"><span class="kv-key">Buffer samples</span> <span class="kv-val" id="bufferSamples">—</span></div>
+          <div class="kv-row"><span class="kv-key">Window</span>         <span class="kv-val" id="windowS">—</span></div>
+          <div class="kv-row"><span class="kv-key">Frame samples</span>  <span class="kv-val" id="frameSamples">—</span></div>
+          <div class="kv-row"><span class="kv-key">Latest age</span>     <span class="kv-val" id="latestAge">—</span></div>
+          <div class="kv-row"><span class="kv-key">Effective rate</span> <span class="kv-val" id="effectiveRate">—</span></div>
+          <div class="kv-row"><span class="kv-key">Flat channels</span>  <span class="kv-val" id="flatChannels">0</span></div>
+          <div class="kv-row"><span class="kv-key">Clipping flags</span> <span class="kv-val" id="clipChannels">0</span></div>
+          <div class="kv-row"><span class="kv-key">Source mode</span>    <span class="kv-val" id="sourceMode">—</span></div>
         </div>
-        <div id="statusMessage" style="padding:8px 12px;font-size:11px;color:var(--muted);min-height:24px;"></div>
+        <div id="statusMessage" class="status-msg"></div>
       </section>
 
       <section>
@@ -426,565 +549,510 @@
 </main>
 
 <script>
-  // ─── STATE ───────────────────────────────────────────────────────────────
-  let lastFrame       = null;
-  let reconnectTimer  = null;
-  let topoSmoothed    = null;
-  const HIST_LEN      = 600;   // ~60 s at 10 fps
-  const EMG_HIST_LEN  = 300;   // ~30 s
-  const ECG_HIST_LEN  = 600;
+  // ─── PALETTE (mirrors CSS variables for canvas draw calls) ────────────────
+  const P = {
+    bg:      '#E4E1DA',
+    panel:   '#F2F0EB',
+    panel2:  '#E9E6DF',
+    surface: '#FAFAF8',
+    text:    '#161412',
+    sub:     '#6A6660',
+    line:    '#C4C0B8',
+    accent:  '#C84E14',
+    good:    '#1A6830',
+    warn:    '#8C6010',
+    bad:     '#9A1A14',
+    scopeBg: '#0C0C0A',
+    phEEG:   '#1DB954',   // phosphor green
+    phEMG:   '#C89820',   // phosphor amber
+    phECG:   '#C83232',   // phosphor red
+    gridDk:  'rgba(48,44,36,.45)',  // grid on dark scopes
+    gridLt:  'rgba(190,186,178,.6)', // grid on light charts
+    emgCh:   ['#C89820','#C86018','#3A6EA8','#7A5E9A'],
+  };
+
+  // ─── STATE ────────────────────────────────────────────────────────────────
+  let lastFrame      = null;
+  let reconnectTimer = null;
+  let topoSmoothed   = null;
+  const HIST_LEN     = 600;
+  const EMG_HIST_LEN = 300;
+  const ECG_HIST_LEN = 600;
   const focusHistory  = [];
   const rewardHistory = [];
-  const emgEnvHistory = [];    // per-channel EMG envelope history
-  const ecgHRHistory  = [];    // HR values over time
-  let simTime         = 0;     // wall-clock seconds for synthetic signals
+  const ecgHRHistory  = [];
+  let simTime         = 0;
   let lastAnimT       = null;
 
-  // ─── ECG SIMULATION ──────────────────────────────────────────────────────
-  // PQRST morphology
+  // ─── ECG SIMULATION ───────────────────────────────────────────────────────
   function pqrst(t) {
-    const p  =  0.18  * Math.exp(-((t - 0.14) ** 2) / (2 * 0.013 ** 2));
-    const q  = -0.085 * Math.exp(-((t - 0.295) ** 2) / (2 * 0.0035 ** 2));
-    const r  =  1.40  * Math.exp(-((t - 0.320) ** 2) / (2 * 0.005  ** 2));
-    const s  = -0.22  * Math.exp(-((t - 0.348) ** 2) / (2 * 0.005  ** 2));
-    const tw =  0.30  * Math.exp(-((t - 0.60)  ** 2) / (2 * 0.030  ** 2));
-    return p + q + r + s + tw;
+    const p  =  0.18  * Math.exp(-((t-0.14)**2)  / (2*0.013**2));
+    const q  = -0.085 * Math.exp(-((t-0.295)**2) / (2*0.0035**2));
+    const r  =  1.40  * Math.exp(-((t-0.320)**2) / (2*0.005**2));
+    const s  = -0.22  * Math.exp(-((t-0.348)**2) / (2*0.005**2));
+    const tw =  0.30  * Math.exp(-((t-0.60)**2)  / (2*0.030**2));
+    return p+q+r+s+tw;
   }
+  function currentHR(t) { return 68 + 10*Math.sin(t*0.04) + 3*Math.sin(t*0.11); }
 
-  // HR varies slowly between 58-78 BPM
-  function currentHR(t) {
-    return 68 + 10 * Math.sin(t * 0.04) + 3 * Math.sin(t * 0.11);
-  }
-
-  // Returns ECG amplitude at absolute time t (seconds)
-  const ecgPhase = { acc: 0, lastT: 0 };
+  const ecgPhase = { acc:0, lastT:0 };
   function ecgAt(t) {
     const dt = t - ecgPhase.lastT;
     ecgPhase.lastT = t;
-    const hr  = currentHR(t);
-    const period = 60 / hr;
-    ecgPhase.acc = (ecgPhase.acc + dt / period) % 1;
-    const noise = (Math.random() - 0.5) * 0.02;
-    return pqrst(ecgPhase.acc) + noise;
+    ecgPhase.acc = (ecgPhase.acc + dt/(60/currentHR(t))) % 1;
+    return pqrst(ecgPhase.acc) + (Math.random()-0.5)*0.018;
   }
 
-  // ─── EMG SIMULATION ──────────────────────────────────────────────────────
-  const EMG_LABELS = ['U.Trap L', 'U.Trap R', 'L.Trap L', 'L.Trap R'];
-  let emgPhase = 0;
-  // Returns 4-channel EMG sample at time t
-  function emgSample(t, strainLevel) {
-    const base = 0.15 + strainLevel * 0.6;
-    const out = [];
-    for (let ch = 0; ch < 4; ch++) {
-      // High-freq muscle noise with amplitude envelope modulated by "strain"
-      const burst = 0.3 * (Math.sin(2 * Math.PI * 37 * t + ch) > 0.6 ? 1 : 0);
-      const noise = (Math.random() - 0.5) * 2 * (base + burst);
-      out.push(noise);
-    }
-    return out;
+  // ─── EMG SIMULATION ───────────────────────────────────────────────────────
+  const EMG_LABELS = ['U.Trap L','U.Trap R','L.Trap L','L.Trap R'];
+  function emgSample(t, strain) {
+    const base = 0.15 + strain*0.6;
+    return Array.from({length:4}, (_,ch) => {
+      const burst = 0.3 * (Math.sin(2*Math.PI*37*t + ch) > 0.6 ? 1 : 0);
+      return (Math.random()-0.5) * 2 * (base + burst);
+    });
   }
 
-  // ─── RING BUFFERS (raw waveform scrollers) ───────────────────────────────
-  const EEG_RAW_LEN = 1500;  // samples retained for raw EEG scope
-  const EMG_RAW_LEN = 2000;  // ~2 s at 1 kHz
+  // ─── RING BUFFERS ─────────────────────────────────────────────────────────
+  const EEG_RAW_LEN = 1500;
+  const EMG_RAW_LEN = 2000;
   const ECG_RAW_LEN = 1500;
-  const rawEEGBuf   = [];    // Array of channel arrays
-  const rawEMGBuf   = [[], [], [], []];
-  const rawECGBuf   = [];
 
-  function pushRawEEG(channels, newT) {
-    // channels is array of arrays (per-channel over the new window)
+  function pushRawEEG(channels) {
     if (!channels.length) return;
     const n = channels[0].length;
     for (let i = 0; i < n; i++) {
-      const sample = channels.map(ch => ch[i] ?? 0);
-      rawEEGBuf.push(sample);
+      rawEEGBuf.push(channels.map(ch => ch[i] ?? 0));
       if (rawEEGBuf.length > EEG_RAW_LEN) rawEEGBuf.shift();
     }
   }
+  const rawEEGBuf = [];
 
-  // ─── TOPOMAP ─────────────────────────────────────────────────────────────
+  // ─── TOPOMAP ──────────────────────────────────────────────────────────────
   const topoPositions = {
-    Fp1: [-0.34,-0.88], Fp2:[0.34,-0.88],
-    F7:[-0.78,-0.48], F3:[-0.42,-0.46], Fz:[0,-0.48], F4:[0.42,-0.46], F8:[0.78,-0.48],
-    T3:[-0.92,0], C3:[-0.46,0], Cz:[0,0], C4:[0.46,0], T4:[0.92,0],
-    T5:[-0.78,0.48], P3:[-0.42,0.46], Pz:[0,0.48], P4:[0.42,0.46], T6:[0.78,0.48],
-    O1:[-0.34,0.86], O2:[0.34,0.86]
+    Fp1:[-0.34,-0.88],Fp2:[0.34,-0.88],
+    F7:[-0.78,-0.48],F3:[-0.42,-0.46],Fz:[0,-0.48],F4:[0.42,-0.46],F8:[0.78,-0.48],
+    T3:[-0.92,0],C3:[-0.46,0],Cz:[0,0],C4:[0.46,0],T4:[0.92,0],
+    T5:[-0.78,0.48],P3:[-0.42,0.46],Pz:[0,0.48],P4:[0.42,0.46],T6:[0.78,0.48],
+    O1:[-0.34,0.86],O2:[0.34,0.86]
   };
 
-  // ─── HELPERS ─────────────────────────────────────────────────────────────
+  // ─── HELPERS ──────────────────────────────────────────────────────────────
   function setBadge(id, text, kind) {
-    const el = document.getElementById(id);
-    if (!el) return;
+    const el = document.getElementById(id); if (!el) return;
     el.textContent = text;
-    el.className = `badge ${kind || ''}`.trim();
+    el.className = `badge ${kind||''}`.trim();
   }
-  function fmt(v, d)    { return Number.isFinite(+v) ? (+v).toFixed(d) : '—'; }
-  function fmtSigned(v, d) {
+  function fmt(v,d) { return Number.isFinite(+v) ? (+v).toFixed(d) : '—'; }
+  function fmtSigned(v,d) {
     if (!Number.isFinite(+v)) return '—';
-    const s = (+v).toFixed(d);
-    return +v > 0 ? '+' + s : s;
+    const s=(+v).toFixed(d); return +v>0?'+'+s:s;
   }
-  function label(v)     { return String(v||'—').replaceAll('_',' '); }
+  function lbl(v) { return String(v||'—').replaceAll('_',' '); }
 
   function channelStats(arr) {
-    let sum = 0, cnt = 0;
-    for (const v of arr) { if (Number.isFinite(v)) { sum += v; cnt++; } }
-    const mean = cnt ? sum/cnt : 0;
-    const devs = arr.filter(Number.isFinite).map(v => Math.abs(v-mean)).sort((a,b)=>a-b);
-    const p95  = devs.length ? devs[Math.floor(devs.length*0.95)] : 1;
-    return { mean, scale: Math.max(p95*3, 1e-9) };
+    let sum=0,cnt=0;
+    for (const v of arr) { if (Number.isFinite(v)){sum+=v;cnt++;} }
+    const mean=cnt?sum/cnt:0;
+    const devs=arr.filter(Number.isFinite).map(v=>Math.abs(v-mean)).sort((a,b)=>a-b);
+    const p95=devs.length?devs[Math.floor(devs.length*0.95)]:1;
+    return {mean, scale:Math.max(p95*3,1e-9)};
   }
-
   function recentRMS(arr) {
-    const tail = arr.slice(Math.max(0, arr.length - 150)).filter(Number.isFinite);
-    if (!tail.length) return 0;
-    const mean = tail.reduce((a,b)=>a+b,0)/tail.length;
+    const tail=arr.slice(Math.max(0,arr.length-150)).filter(Number.isFinite);
+    if(!tail.length) return 0;
+    const mean=tail.reduce((a,b)=>a+b,0)/tail.length;
     return Math.sqrt(tail.reduce((s,v)=>s+(v-mean)**2,0)/tail.length);
   }
-
   function robustScale(vals) {
-    if (!vals.length) return 1;
-    const s = vals.map(Math.abs).sort((a,b)=>a-b);
-    return Math.max(s[Math.min(s.length-1, Math.floor(s.length*0.9))], 1e-6);
+    if(!vals.length) return 1;
+    const s=vals.map(Math.abs).sort((a,b)=>a-b);
+    return Math.max(s[Math.min(s.length-1,Math.floor(s.length*0.9))],1e-6);
   }
 
   function topoColor(v) {
-    v = Math.max(-1, Math.min(1, v));
-    const stops = [
-      [-1.0,[58,103,191]],[-0.35,[65,214,177]],[0,[13,15,17]],
-      [0.35,[245,200,66]],[1.0,[255,95,95]]
+    v=Math.max(-1,Math.min(1,v));
+    // Braun-inspired: cool blue → cream → warm orange-red
+    const stops=[
+      [-1.0,[50,90,170]],[-0.4,[120,160,200]],[0,[230,226,218]],
+      [0.4,[200,100,30]],[1.0,[160,28,20]]
     ];
-    for (let i = 0; i < stops.length-1; i++) {
-      const [av,ac] = stops[i], [bv,bc] = stops[i+1];
-      if (v >= av && v <= bv) {
-        const t = (v-av)/(bv-av);
-        return ac.map((c,j)=>Math.round(c+(bc[j]-c)*t));
-      }
+    for(let i=0;i<stops.length-1;i++){
+      const[av,ac]=stops[i],[bv,bc]=stops[i+1];
+      if(v>=av&&v<=bv){const t=(v-av)/(bv-av);return ac.map((c,j)=>Math.round(c+(bc[j]-c)*t));}
     }
     return stops[stops.length-1][1];
   }
-
-  function interpolateAt(x, y, labels, vals) {
-    let w = 0, tot = 0;
-    for (let i = 0; i < labels.length; i++) {
-      const pos = topoPositions[labels[i]]; if (!pos) continue;
-      const d2 = Math.max((x-pos[0])**2+(y-pos[1])**2, 0.0025);
-      const wt = 1/(d2**1.4);
-      w += vals[i]*wt; tot += wt;
+  function interpolateAt(x,y,labels,vals){
+    let w=0,tot=0;
+    for(let i=0;i<labels.length;i++){
+      const pos=topoPositions[labels[i]]; if(!pos) continue;
+      const d2=Math.max((x-pos[0])**2+(y-pos[1])**2,0.0025);
+      const wt=1/(d2**1.4); w+=vals[i]*wt; tot+=wt;
     }
-    return tot ? Math.max(-1,Math.min(1,w/tot)) : 0;
+    return tot?Math.max(-1,Math.min(1,w/tot)):0;
   }
 
-  // ─── CANVAS HELPERS ──────────────────────────────────────────────────────
-  function setCanvasSize(canvas) {
-    const dpr = window.devicePixelRatio || 1;
-    const r   = canvas.getBoundingClientRect();
-    const w   = Math.max(40, Math.floor(r.width  * dpr));
-    const h   = Math.max(20, Math.floor(r.height * dpr));
-    if (canvas.width !== w || canvas.height !== h) {
-      canvas.width  = w;
-      canvas.height = h;
-    }
-    return { w, h, dpr };
+  // ─── CANVAS HELPERS ───────────────────────────────────────────────────────
+  function sz(canvas) {
+    const dpr=window.devicePixelRatio||1, r=canvas.getBoundingClientRect();
+    const w=Math.max(40,Math.floor(r.width*dpr)), h=Math.max(20,Math.floor(r.height*dpr));
+    if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;}
+    return {w,h,dpr};
   }
 
-  // Draw a dark background with grid lines
-  function drawGrid(ctx, w, h, dpr, cols=10, rows=4, color='rgba(37,46,54,.6)') {
-    ctx.fillStyle = '#080a0b';
-    ctx.fillRect(0,0,w,h);
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1;
-    for (let i=1;i<cols;i++) { ctx.beginPath(); ctx.moveTo(i*(w/cols),0); ctx.lineTo(i*(w/cols),h); ctx.stroke(); }
-    for (let j=1;j<rows;j++) { ctx.beginPath(); ctx.moveTo(0,j*(h/rows)); ctx.lineTo(w,j*(h/rows)); ctx.stroke(); }
+  // Dark scope grid (phosphor)
+  function scopeGrid(ctx,w,h,cols=10,rows=4){
+    ctx.fillStyle=P.scopeBg; ctx.fillRect(0,0,w,h);
+    ctx.strokeStyle=P.gridDk; ctx.lineWidth=1;
+    for(let i=1;i<cols;i++){ctx.beginPath();ctx.moveTo(i*(w/cols),0);ctx.lineTo(i*(w/cols),h);ctx.stroke();}
+    for(let j=1;j<rows;j++){ctx.beginPath();ctx.moveTo(0,j*(h/rows));ctx.lineTo(w,j*(h/rows));ctx.stroke();}
   }
 
-  // ─── UPDATE STATS / UI ───────────────────────────────────────────────────
+  // Light chart grid (paper / cream)
+  function chartGrid(ctx,w,h,cols=10,rows=4){
+    ctx.fillStyle=P.surface; ctx.fillRect(0,0,w,h);
+    ctx.strokeStyle=P.gridLt; ctx.lineWidth=1;
+    for(let i=1;i<cols;i++){ctx.beginPath();ctx.moveTo(i*(w/cols),0);ctx.lineTo(i*(w/cols),h);ctx.stroke();}
+    for(let j=1;j<rows;j++){ctx.beginPath();ctx.moveTo(0,j*(h/rows));ctx.lineTo(w,j*(h/rows));ctx.stroke();}
+  }
+
+  // ─── UPDATE UI ────────────────────────────────────────────────────────────
   function updateStats(frame) {
-    const meta      = frame.metadata  || {};
-    const stats     = frame.stats     || {};
-    const quality   = frame.quality   || {};
-    const inference = frame.inference || {};
+    const meta=frame.metadata||{}, stats=frame.stats||{};
+    const quality=frame.quality||{}, inference=frame.inference||{};
 
-    const status = meta.connection_status || 'starting';
-    const kind   = status === 'connected' ? 'good' : status === 'degraded' ? 'warn' : '';
+    const status=meta.connection_status||'starting';
+    const kind=status==='connected'?'good':status==='degraded'?'warn':'';
     setBadge('statusBadge', status, kind);
-    setBadge('sourceBadge', meta.source_mode || 'source', meta.source_mode==='simulator'?'good':'');
-    setBadge('streamBadge', meta.stream_name || 'DSI24-EEG', '');
-    setBadge('rateBadge',   `${fmt(meta.sample_rate_hz,0)} Hz`, 'blue');
+    setBadge('sourceBadge', meta.source_mode||'source', meta.source_mode==='simulator'?'good':'');
+    setBadge('streamBadge', meta.stream_name||'DSI24-EEG', '');
+    setBadge('rateBadge',   `${fmt(meta.sample_rate_hz,0)} Hz`, 'hi');
 
-    // KV panel
-    document.getElementById('streamName').textContent    = meta.stream_name || '—';
-    document.getElementById('sampleRate').textContent    = `${fmt(meta.sample_rate_hz,0)} Hz`;
-    document.getElementById('channelCountKV').textContent= (meta.channel_labels||[]).length;
-    document.getElementById('bufferSamples').textContent = stats.buffer_samples ?? '—';
-    document.getElementById('windowS').textContent       = stats.window_s != null ? `${fmt(stats.window_s,1)} s` : '—';
-    document.getElementById('frameSamples').textContent  = stats.frame_samples ?? '—';
-    document.getElementById('latestAge').textContent     = stats.latest_sample_age_ms != null ? `${fmt(stats.latest_sample_age_ms,0)} ms` : '—';
-    document.getElementById('effectiveRate').textContent = `${fmt(stats.effective_rate_hz,1)} Hz`;
-    const flatCh = (quality.flat_channel_labels||[]).length;
-    const clipCh = (quality.clip_channel_labels||[]).length;
-    document.getElementById('flatChannels').textContent  = flatCh;
-    document.getElementById('clipChannels').textContent  = clipCh;
-    document.getElementById('sourceMode').textContent    = meta.source_mode || '—';
-    document.getElementById('statusMessage').textContent = meta.message || '';
-    document.getElementById('channelCount').textContent  = `${(meta.channel_labels||[]).length} ch`;
-    document.getElementById('bufferedBadge').textContent = `${stats.buffer_samples??0} smp`;
-    document.getElementById('ageBadge').textContent      = stats.latest_sample_age_ms != null ? `${fmt(stats.latest_sample_age_ms,0)} ms` : '— ms';
+    setText('streamName',    meta.stream_name||'—');
+    setText('sampleRate',    `${fmt(meta.sample_rate_hz,0)} Hz`);
+    setText('channelCountKV',(meta.channel_labels||[]).length);
+    setText('bufferSamples', stats.buffer_samples??'—');
+    setText('windowS',       stats.window_s!=null?`${fmt(stats.window_s,1)} s`:'—');
+    setText('frameSamples',  stats.frame_samples??'—');
+    setText('latestAge',     stats.latest_sample_age_ms!=null?`${fmt(stats.latest_sample_age_ms,0)} ms`:'—');
+    setText('effectiveRate', `${fmt(stats.effective_rate_hz,1)} Hz`);
 
-    // Signal quality card
-    const nCh    = (meta.channel_labels||[]).length || 19;
-    const badCh  = flatCh + clipCh;
-    const qPct   = Math.max(0, Math.round((nCh - badCh) / nCh * 100));
-    const qColor = qPct >= 90 ? 'var(--accent)' : qPct >= 70 ? 'var(--warn)' : 'var(--bad)';
-    document.getElementById('mcQuality').textContent          = `${qPct}%`;
-    document.getElementById('mcQuality').style.color          = qColor;
-    document.getElementById('mcQualityBar').style.width       = `${qPct}%`;
-    document.getElementById('mcQualityBar').style.background  = qColor;
-    document.getElementById('mcQualitySub').textContent       = `flat: ${flatCh} · clipping: ${clipCh}`;
+    const flatCh=(quality.flat_channel_labels||[]).length;
+    const clipCh=(quality.clip_channel_labels||[]).length;
+    setText('flatChannels', flatCh);
+    setText('clipChannels', clipCh);
+    setText('sourceMode',   meta.source_mode||'—');
+    setText('statusMessage',meta.message||'');
+    setText('channelCount', `${(meta.channel_labels||[]).length} ch`);
+    setText('bufferedBadge',`${stats.buffer_samples??0} smp`);
+    setText('ageBadge',     stats.latest_sample_age_ms!=null?`${fmt(stats.latest_sample_age_ms,0)} ms`:'— ms');
+
+    // Quality card
+    const nCh=(meta.channel_labels||[]).length||19;
+    const qPct=Math.max(0,Math.round((nCh-flatCh-clipCh)/nCh*100));
+    const qCol=qPct>=90?P.good:qPct>=70?P.warn:P.bad;
+    setVal('mcQuality',    `${qPct}%`,  qCol);
+    setBar('mcQualityBar', qPct, qCol);
+    setText('mcQualitySub',`flat: ${flatCh} · clipping: ${clipCh}`);
 
     updateInference(inference);
   }
 
+  function setText(id,v){const e=document.getElementById(id);if(e)e.textContent=v;}
+  function setVal(id,v,col){const e=document.getElementById(id);if(!e)return;e.textContent=v;if(col)e.style.color=col;}
+  function setBar(id,pct,col){
+    const e=document.getElementById(id);if(!e)return;
+    e.style.width=`${pct}%`;if(col)e.style.background=col;
+  }
+
   function updateInference(inf) {
-    const status  = inf.status || 'waiting';
-    const focus   = inf.focus_score;
-    const reward  = inf.reward_score;
-    const feats   = inf.features || {};
+    const status=inf.status||'waiting';
+    const focus=inf.focus_score, reward=inf.reward_score;
+    const feats=inf.features||{};
     setBadge('inferenceStatus', status, status==='ok'?'good':'warn');
 
-    // Focus score metric card
-    const fPct = focus != null ? Math.max(0,Math.min(100,focus*100)) : null;
-    const fCol = focus >= 0.7 ? 'var(--accent)' : focus <= 0.36 ? 'var(--bad)' : 'var(--warn)';
-    document.getElementById('mcFocus').textContent        = focus != null ? `${Math.round(fPct)}%` : '—';
-    document.getElementById('mcFocus').style.color        = focus != null ? fCol : 'var(--muted)';
-    document.getElementById('mcFocusBar').style.width     = fPct != null ? `${fPct}%` : '0%';
-    document.getElementById('mcFocusBar').style.background= fCol;
-    document.getElementById('mcFocusMood').textContent    = label(inf.focus_mood);
+    // Focus card
+    const fPct=focus!=null?Math.max(0,Math.min(100,focus*100)):null;
+    const fCol=focus>=0.7?P.good:focus<=0.36?P.bad:P.warn;
+    setVal('mcFocus',   fPct!=null?`${Math.round(fPct)}%`:'—', fPct!=null?fCol:P.sub);
+    setBar('mcFocusBar',fPct??0, fCol);
+    setText('mcFocusMood', lbl(inf.focus_mood));
 
-    // Fatigue = high theta + low engagement proxy (1 - focus, weighted by rel_theta)
-    const relTheta = feats.relative_theta;
-    const engIdx   = feats.engagement_index;
-    let fatigue    = null;
-    if (relTheta != null && engIdx != null) {
-      // Fatigue index: high theta + low engagement → fatigue
-      fatigue = Math.max(0, Math.min(1, relTheta * 2.5 + (1 - Math.min(1, engIdx)) * 0.35 - 0.2));
-    } else if (focus != null) {
-      fatigue = Math.max(0, 0.85 - focus * 0.9);
-    }
-    const fatPct = fatigue != null ? Math.round(fatigue * 100) : null;
-    const fatCol = fatigue == null ? 'var(--muted)' : fatigue >= 0.65 ? 'var(--bad)' : fatigue >= 0.4 ? 'var(--warn)' : 'var(--accent)';
-    const fatMood= fatigue == null ? '—' : fatigue >= 0.65 ? 'high fatigue' : fatigue >= 0.4 ? 'moderate' : 'alert';
-    document.getElementById('mcFatigue').textContent        = fatPct != null ? `${fatPct}%` : '—';
-    document.getElementById('mcFatigue').style.color        = fatCol;
-    document.getElementById('mcFatigueBar').style.width     = fatPct != null ? `${fatPct}%` : '0%';
-    document.getElementById('mcFatigueBar').style.background= fatCol;
-    document.getElementById('mcFatigueMood').textContent    = fatMood;
+    // Fatigue card
+    const relTheta=feats.relative_theta, engIdx=feats.engagement_index;
+    let fatigue=null;
+    if(relTheta!=null&&engIdx!=null)
+      fatigue=Math.max(0,Math.min(1,relTheta*2.5+(1-Math.min(1,engIdx))*0.35-0.2));
+    else if(focus!=null)
+      fatigue=Math.max(0,0.85-focus*0.9);
+    const fatPct=fatigue!=null?Math.round(fatigue*100):null;
+    const fatCol=fatigue==null?P.sub:fatigue>=0.65?P.bad:fatigue>=0.4?P.warn:P.good;
+    setVal('mcFatigue',    fatPct!=null?`${fatPct}%`:'—', fatCol);
+    setBar('mcFatigueBar', fatPct??0, fatCol);
+    setText('mcFatigueMood', fatigue==null?'—':fatigue>=0.65?'high fatigue':fatigue>=0.4?'moderate':'alert');
 
     // Inference panel
-    document.getElementById('focusScore').textContent  = focus  != null ? `${Math.round(focus*100)}%`   : 'n/a';
-    document.getElementById('focusFill').style.width   = fPct   != null ? `${fPct}%`  : '0%';
-    document.getElementById('focusFill').style.background = fCol;
-    document.getElementById('focusMood').textContent   = label(inf.focus_mood);
-    document.getElementById('rewardScore').textContent = reward != null ? fmtSigned(reward,2) : 'n/a';
-    document.getElementById('rewardFill').style.width  = reward != null ? `${Math.max(0,Math.min(100,Math.abs(reward)*50))}%` : '0%';
-    document.getElementById('rewardFill').style.transform = (reward==null||reward>=0) ? 'translateX(0)' : 'translateX(-100%)';
-    document.getElementById('rewardFill').style.background = reward==null?'var(--muted)':reward>=0?'var(--accent)':'var(--bad)';
-    document.getElementById('rewardMood').textContent  = label(inf.reward_mood);
-    document.getElementById('dominantBand').textContent= label(inf.dominant_band);
-    document.getElementById('engagementIndex').textContent  = feats.engagement_index   != null ? fmt(feats.engagement_index,3) : '—';
-    document.getElementById('frontalAlpha').textContent     = feats.frontal_alpha       != null ? fmt(feats.frontal_alpha,3)    : '—';
-    document.getElementById('alphaAsymmetry').textContent   = feats.frontal_alpha_asymmetry != null ? fmtSigned(feats.frontal_alpha_asymmetry,3) : '—';
-    const rt = feats.relative_theta != null ? fmt(feats.relative_theta,2) : '—';
-    const ra = feats.relative_alpha != null ? fmt(feats.relative_alpha,2) : '—';
-    const rb = feats.relative_beta  != null ? fmt(feats.relative_beta,2)  : '—';
-    document.getElementById('relBands').textContent = `${rt} / ${ra} / ${rb}`;
+    setText('focusScore', focus!=null?`${Math.round(focus*100)}%`:'n/a');
+    setBar('focusFill', fPct??0, fCol);
+    setText('focusMood', lbl(inf.focus_mood));
+    setText('rewardScore', reward!=null?fmtSigned(reward,2):'n/a');
+    const rFill=document.getElementById('rewardFill');
+    if(rFill){
+      rFill.style.width  =reward!=null?`${Math.max(0,Math.min(100,Math.abs(reward)*50))}%`:'0%';
+      rFill.style.transform=(reward==null||reward>=0)?'translateX(0)':'translateX(-100%)';
+      rFill.style.background=reward==null?P.sub:reward>=0?P.good:P.bad;
+    }
+    setText('rewardMood', lbl(inf.reward_mood));
+    setText('dominantBand', lbl(inf.dominant_band));
+    setText('engagementIndex', feats.engagement_index!=null?fmt(feats.engagement_index,3):'—');
+    setText('frontalAlpha',    feats.frontal_alpha!=null?fmt(feats.frontal_alpha,3):'—');
+    setText('alphaAsymmetry',  feats.frontal_alpha_asymmetry!=null?fmtSigned(feats.frontal_alpha_asymmetry,3):'—');
+    const rt=feats.relative_theta!=null?fmt(feats.relative_theta,2):'—';
+    const ra=feats.relative_alpha!=null?fmt(feats.relative_alpha,2):'—';
+    const rb=feats.relative_beta!=null?fmt(feats.relative_beta,2):'—';
+    setText('relBands', `${rt} / ${ra} / ${rb}`);
 
-    const domBand = inf.dominant_band || '—';
-    setBadge('dominantBandBadge', domBand, domBand==='beta'?'good':domBand==='theta'?'warn':'');
+    const dom=inf.dominant_band||'—';
+    setBadge('dominantBandBadge', dom, dom==='beta'?'good':dom==='theta'?'warn':'');
 
-    // Push to history
-    if (focus  != null) { focusHistory.push(focus);   if (focusHistory.length  > HIST_LEN) focusHistory.shift();  }
-    if (reward != null) { rewardHistory.push(reward);  if (rewardHistory.length > HIST_LEN) rewardHistory.shift(); }
+    if(focus!=null){focusHistory.push(focus); if(focusHistory.length>HIST_LEN) focusHistory.shift();}
+    if(reward!=null){rewardHistory.push(reward); if(rewardHistory.length>HIST_LEN) rewardHistory.shift();}
   }
 
-  // ─── DRAW: RAW EEG SCOPE ─────────────────────────────────────────────────
+  // ─── DRAW: RAW EEG SCOPE (phosphor green on dark) ─────────────────────────
   function drawEEGScope(frame) {
-    const canvas = document.getElementById('scopeEEG');
-    const {w,h,dpr} = setCanvasSize(canvas);
-    const ctx = canvas.getContext('2d');
+    const canvas=document.getElementById('scopeEEG');
+    const {w,h,dpr}=sz(canvas);
+    const ctx=canvas.getContext('2d');
+    const labels=frame.metadata.channel_labels||[];
+    const channels=frame.samples.channels||[];
+    const t=frame.samples.t_rel||[];
+    const n=labels.length||19;
+    pushRawEEG(channels);
 
-    const labels   = frame.metadata.channel_labels || [];
-    const channels = frame.samples.channels        || [];
-    const t        = frame.samples.t_rel           || [];
-    const n        = labels.length || 19;
-    pushRawEEG(channels, t);
+    scopeGrid(ctx,w,h,12,n);
 
-    ctx.clearRect(0,0,w,h);
-    ctx.fillStyle = '#080a0b';
-    ctx.fillRect(0,0,w,h);
+    const L=Math.round(44*dpr),R=Math.round(6*dpr),T=Math.round(4*dpr),B=Math.round(4*dpr);
+    const pW=w-L-R, pH=h-T-B, rowH=pH/n;
 
-    const L = Math.round(46 * dpr), R = Math.round(8 * dpr);
-    const T = Math.round(6  * dpr), B = Math.round(6 * dpr);
-    const pW = w - L - R, pH = h - T - B;
-    const rowH = pH / n;
+    ctx.font=`${Math.round(9.5*dpr)}px Helvetica Neue,Helvetica,Arial,sans-serif`;
+    ctx.textBaseline='middle'; ctx.textAlign='right';
 
-    // Grid rows
-    ctx.strokeStyle = 'rgba(37,46,54,.7)';
-    ctx.lineWidth = 1;
-    for (let i = 0; i < n; i++) {
-      const y = T + rowH * (i + 0.5);
-      ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(w-R, y); ctx.stroke();
+    if(!t.length||!channels.length){
+      ctx.fillStyle=P.sub;
+      ctx.fillText('WAITING FOR SIGNAL', L+80*dpr, T+20*dpr); return;
     }
 
-    // Channel labels
-    ctx.font = `${Math.round(10.5*dpr)}px ui-sans-serif, system-ui, sans-serif`;
-    ctx.textBaseline = 'middle';
-    ctx.textAlign = 'right';
+    const minT=t[0],maxT=t[t.length-1]||0,spanT=Math.max(.001,maxT-minT);
+    const flatCh=lastFrame?.quality?.flat_channel_labels||[];
+    const clipCh=lastFrame?.quality?.clip_channel_labels||[];
 
-    if (!t.length || !channels.length) {
-      ctx.fillStyle = '#9aa7b1';
-      ctx.fillText('Waiting for samples…', L+40*dpr, T+24*dpr);
-      return;
-    }
+    for(let ch=0;ch<Math.min(n,channels.length);ch++){
+      const vals=channels[ch]||[];
+      const stats=channelStats(vals);
+      const centerY=T+rowH*(ch+0.5), amp=rowH*0.42;
+      const lname=labels[ch]||`ch${ch+1}`;
+      const isFlat=flatCh.includes(lname), isClip=clipCh.includes(lname);
 
-    const minT = t[0], maxT = t[t.length-1] || 0, spanT = Math.max(.001, maxT-minT);
+      // Label — uppercase, phosphor tint for normal
+      ctx.fillStyle=isFlat?P.phEMG:isClip?P.bad:'#4A7A5A';
+      ctx.fillText(lname, L-4*dpr, centerY);
 
-    for (let ch = 0; ch < Math.min(n, channels.length); ch++) {
-      const vals  = channels[ch] || [];
-      const stats = channelStats(vals);
-      const centerY = T + rowH*(ch+0.5);
-      const amp     = rowH * 0.42;
-
-      // Quality coloring
-      const flatCh = lastFrame?.quality?.flat_channel_labels || [];
-      const clipCh = lastFrame?.quality?.clip_channel_labels || [];
-      const lbl    = labels[ch] || `ch${ch+1}`;
-      const isFlat = flatCh.includes(lbl);
-      const isClip = clipCh.includes(lbl);
-      ctx.fillStyle = isFlat ? 'var(--warn)' : isClip ? 'var(--bad)' : '#7a8d9b';
-      ctx.fillText(lbl, L - 4*dpr, centerY);
-
-      if (vals.length < 2) continue;
-      ctx.strokeStyle = isFlat ? 'rgba(245,200,66,.55)' : isClip ? 'rgba(255,95,95,.7)' : '#35d6aa';
-      ctx.lineWidth   = 1.2 * dpr;
+      if(vals.length<2) continue;
+      ctx.strokeStyle=isFlat?`${P.phEMG}99`:isClip?`${P.bad}AA`:P.phEEG;
+      ctx.lineWidth=1.0*dpr;
       ctx.beginPath();
-      for (let i = 0; i < vals.length; i++) {
-        const x = L + ((t[i]-minT)/spanT)*pW;
-        const y = centerY - ((vals[i]-stats.mean)/stats.scale)*amp;
-        i === 0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+      for(let i=0;i<vals.length;i++){
+        const x=L+((t[i]-minT)/spanT)*pW;
+        const y=centerY-((vals[i]-stats.mean)/stats.scale)*amp;
+        i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
       }
       ctx.stroke();
     }
   }
 
-  // ─── DRAW: SCORES CHART ──────────────────────────────────────────────────
+  // ─── DRAW: SCORES CHART (light / paper background) ────────────────────────
   function drawScoresChart() {
-    const canvas = document.getElementById('scoresChart');
-    const {w,h,dpr} = setCanvasSize(canvas);
-    const ctx = canvas.getContext('2d');
-    drawGrid(ctx,w,h,dpr,10,4);
+    const canvas=document.getElementById('scoresChart');
+    const {w,h,dpr}=sz(canvas);
+    const ctx=canvas.getContext('2d');
+    chartGrid(ctx,w,h,10,4);
 
-    const L=4, R=4, T=14*dpr, B=16*dpr;
+    const L=32*dpr,R=8,T=14*dpr,B=16*dpr;
     const pW=w-L-R, pH=h-T-B;
 
-    // Axis labels
-    ctx.font = `${10*dpr}px ui-sans-serif,system-ui,sans-serif`;
-    ctx.textBaseline='middle'; ctx.textAlign='right';
-    ctx.fillStyle='var(--muted)';
-    ctx.fillText('1.0', L+28*dpr, T);
-    ctx.fillText('0',   L+28*dpr, T+pH*0.5);
-    ctx.fillText('-1',  L+28*dpr, T+pH);
+    ctx.font=`${9*dpr}px Helvetica Neue,Helvetica,Arial,sans-serif`;
+    ctx.fillStyle=P.sub; ctx.textBaseline='middle'; ctx.textAlign='right';
+    ctx.fillText('1.0', L-4, T);
+    ctx.fillText('0',   L-4, T+pH*0.5);
+    ctx.fillText('−1',  L-4, T+pH);
 
-    function drawLine(history, color, scale) {
-      if (history.length < 2) return;
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 1.5 * dpr;
+    // Zero line
+    ctx.strokeStyle=P.line; ctx.lineWidth=1;
+    ctx.setLineDash([4*dpr,4*dpr]);
+    ctx.beginPath(); ctx.moveTo(L,T+pH*0.5); ctx.lineTo(w-R,T+pH*0.5); ctx.stroke();
+    ctx.setLineDash([]);
+
+    function drawLine(hist,color){
+      if(hist.length<2) return;
+      ctx.strokeStyle=color; ctx.lineWidth=1.5*dpr;
       ctx.beginPath();
-      for (let i = 0; i < history.length; i++) {
-        const x = L + (i / (HIST_LEN-1)) * pW;
-        const y = T + pH * (0.5 - history[i] * scale * 0.5);
-        i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+      for(let i=0;i<hist.length;i++){
+        const x=L+(i/(HIST_LEN-1))*pW;
+        const y=T+pH*(0.5-hist[i]*0.5);
+        i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
       }
       ctx.stroke();
     }
+    drawLine(rewardHistory, P.warn);
+    drawLine(focusHistory,  P.accent);
 
-    drawLine(rewardHistory, '#6eaaff', 1);   // reward: -1..1
-    drawLine(focusHistory,  '#35d6aa', 1);   // focus: 0..1, treat as -0..1 centered at 0
-
-    // Legend
+    ctx.font=`${9*dpr}px Helvetica Neue,Helvetica,Arial,sans-serif`;
     ctx.textAlign='left'; ctx.textBaseline='top';
-    ctx.fillStyle='#35d6aa'; ctx.fillText('▬ Focus',  L+4, 2);
-    ctx.fillStyle='#6eaaff'; ctx.fillText('▬ Reward', L+60*dpr, 2);
+    ctx.fillStyle=P.accent; ctx.fillText('— FOCUS',  L+4, 2);
+    ctx.fillStyle=P.warn;   ctx.fillText('— REWARD', L+58*dpr, 2);
   }
 
-  // ─── DRAW: EEG BANDS CHART ───────────────────────────────────────────────
+  // ─── DRAW: EEG BANDS (light background, ink bars) ─────────────────────────
   function drawBandsChart(frame) {
-    const canvas = document.getElementById('bandsChart');
-    const {w,h,dpr} = setCanvasSize(canvas);
-    const ctx = canvas.getContext('2d');
-    drawGrid(ctx,w,h,dpr,6,4);
+    const canvas=document.getElementById('bandsChart');
+    const {w,h,dpr}=sz(canvas);
+    const ctx=canvas.getContext('2d');
+    chartGrid(ctx,w,h,4,5);
 
-    const feats = frame?.inference?.features || {};
-    const bands = [
-      { label:'δ delta', value: null,                 color:'#8a97a3' },
-      { label:'θ theta', value: feats.relative_theta, color:'#6eaaff' },
-      { label:'α alpha', value: feats.relative_alpha, color:'#35d6aa' },
-      { label:'β beta',  value: feats.relative_beta,  color:'#b48cff' },
+    const feats=frame?.inference?.features||{};
+    const bands=[
+      {name:'DELTA', val:null,                  col:P.sub},
+      {name:'THETA', val:feats.relative_theta,  col:'#3A6EA8'},
+      {name:'ALPHA', val:feats.relative_alpha,  col:P.accent},
+      {name:'BETA',  val:feats.relative_beta,   col:P.good},
     ];
 
-    const nbands = bands.length;
-    const barW   = Math.floor((w * 0.7) / nbands);
-    const gap    = Math.floor((w * 0.3) / (nbands + 1));
-    const maxH   = h - 28*dpr;
-    const baseY  = h - 14*dpr;
+    const nb=bands.length;
+    const barW=Math.floor((w*0.55)/nb);
+    const gap =Math.floor((w*0.45)/(nb+1));
+    const maxH=h-26*dpr;
+    const baseY=h-13*dpr;
 
-    ctx.font = `${11*dpr}px ui-sans-serif,system-ui,sans-serif`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font=`${9*dpr}px Helvetica Neue,Helvetica,Arial,sans-serif`;
+    ctx.textAlign='center'; ctx.textBaseline='middle';
 
-    for (let i = 0; i < nbands; i++) {
-      const x    = gap + i*(barW+gap);
-      const bval = bands[i].value;
-      const norm = bval != null ? Math.max(0, Math.min(1, bval * 3.5)) : 0;
-      const bh   = Math.round(norm * maxH);
+    for(let i=0;i<nb;i++){
+      const x=gap+i*(barW+gap);
+      const bv=bands[i].val;
+      const norm=bv!=null?Math.max(0,Math.min(1,bv*3.5)):0;
+      const bh=Math.round(norm*maxH);
 
-      ctx.fillStyle = bands[i].color + '30';
-      ctx.fillRect(x, 4, barW, maxH);
-      ctx.fillStyle = bands[i].color;
-      ctx.fillRect(x, baseY - bh, barW, bh);
-
-      ctx.fillStyle = '#f0f4f7';
-      ctx.fillText(bands[i].label, x + barW/2, baseY + 7*dpr);
-      if (bval != null) {
-        ctx.fillStyle = bands[i].color;
-        ctx.fillText(fmt(bval,2), x + barW/2, Math.max(8*dpr, baseY - bh - 8*dpr));
+      // Track
+      ctx.fillStyle=P.line+'80';
+      ctx.fillRect(x,4,barW,maxH);
+      // Bar fill
+      ctx.fillStyle=bands[i].col;
+      ctx.fillRect(x,baseY-bh,barW,bh);
+      // Label
+      ctx.fillStyle=P.sub;
+      ctx.fillText(bands[i].name, x+barW/2, baseY+7*dpr);
+      // Value
+      if(bv!=null){
+        ctx.fillStyle=bands[i].col;
+        ctx.fillText(fmt(bv,2), x+barW/2, Math.max(8*dpr,baseY-bh-8*dpr));
       }
     }
   }
 
-  // ─── DRAW: POSTURE EMG CHART (envelope) ──────────────────────────────────
-  const emgChLabels = ['U.Trap L','U.Trap R','L.Trap L','L.Trap R'];
-  const emgChColors = ['#f5c842','#ff9a45','#6eaaff','#b48cff'];
-  const emgChHistory = [[],[],[],[]];
-
-  function pushEMGHistory(samples) {
-    for (let ch = 0; ch < 4; ch++) {
-      const env = Math.sqrt(samples.map(s=>s[ch]**2).reduce((a,b)=>a+b,0)/samples.length);
+  // ─── DRAW: POSTURE EMG CHART (light, envelope lines) ──────────────────────
+  const emgChHistory=[[],[],[],[]];
+  function pushEMGHistory(samples){
+    for(let ch=0;ch<4;ch++){
+      const env=Math.sqrt(samples.map(s=>s[ch]**2).reduce((a,b)=>a+b,0)/samples.length);
       emgChHistory[ch].push(env);
-      if (emgChHistory[ch].length > EMG_HIST_LEN) emgChHistory[ch].shift();
+      if(emgChHistory[ch].length>EMG_HIST_LEN) emgChHistory[ch].shift();
     }
   }
-
-  function drawEMGChart() {
-    const canvas = document.getElementById('emgChart');
-    const {w,h,dpr} = setCanvasSize(canvas);
-    const ctx = canvas.getContext('2d');
-    drawGrid(ctx,w,h,dpr,10,3);
-
-    const L=4, T=4, R=4, B=14*dpr;
-    const pW=w-L-R, pH=h-T-B;
-
-    for (let ch = 0; ch < 4; ch++) {
-      const hist = emgChHistory[ch];
-      if (hist.length < 2) continue;
-      const maxV = Math.max(...hist, 0.01);
-      ctx.strokeStyle = emgChColors[ch];
-      ctx.lineWidth = 1.2*dpr;
+  function drawEMGChart(){
+    const canvas=document.getElementById('emgChart');
+    const {w,h,dpr}=sz(canvas);
+    const ctx=canvas.getContext('2d');
+    chartGrid(ctx,w,h,10,3);
+    const L=4,T=4,R=4,B=14*dpr, pW=w-L-R, pH=h-T-B;
+    for(let ch=0;ch<4;ch++){
+      const hist=emgChHistory[ch]; if(hist.length<2) continue;
+      const maxV=Math.max(...hist,0.01);
+      ctx.strokeStyle=P.emgCh[ch]; ctx.lineWidth=1.3*dpr;
       ctx.beginPath();
-      for (let i=0;i<hist.length;i++) {
-        const x = L + (i/(EMG_HIST_LEN-1))*pW;
-        const y = T + pH*(1 - hist[i]/maxV);
-        i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+      for(let i=0;i<hist.length;i++){
+        const x=L+(i/(EMG_HIST_LEN-1))*pW;
+        const y=T+pH*(1-hist[i]/maxV);
+        i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
       }
       ctx.stroke();
     }
-
-    // Legend
-    ctx.font = `${10*dpr}px ui-sans-serif,system-ui,sans-serif`;
+    ctx.font=`${9*dpr}px Helvetica Neue,Helvetica,Arial,sans-serif`;
     ctx.textAlign='left'; ctx.textBaseline='bottom';
-    for (let ch=0;ch<4;ch++) {
-      ctx.fillStyle=emgChColors[ch];
-      ctx.fillText(emgChLabels[ch], 8+(ch*60)*dpr, h-2);
+    for(let ch=0;ch<4;ch++){
+      ctx.fillStyle=P.emgCh[ch];
+      ctx.fillText(EMG_LABELS[ch], 6+(ch*58)*dpr, h-2);
     }
   }
 
-  // ─── DRAW: ECG CONTEXT CHART (HR trend) ──────────────────────────────────
-  function drawECGCtxChart() {
-    const canvas = document.getElementById('ecgCtxChart');
-    const {w,h,dpr} = setCanvasSize(canvas);
-    const ctx = canvas.getContext('2d');
-    drawGrid(ctx,w,h,dpr,10,4);
-
-    const L=4, T=4, R=4, B=14*dpr;
-    const pW=w-L-R, pH=h-T-B;
-    const HR_MIN=50, HR_MAX=90;
-
-    if (ecgHRHistory.length >= 2) {
-      ctx.strokeStyle = '#ff6b9d';
-      ctx.lineWidth = 1.5*dpr;
+  // ─── DRAW: ECG CONTEXT CHART (HR trend) ───────────────────────────────────
+  function drawECGCtxChart(){
+    const canvas=document.getElementById('ecgCtxChart');
+    const {w,h,dpr}=sz(canvas);
+    const ctx=canvas.getContext('2d');
+    chartGrid(ctx,w,h,10,4);
+    const L=4,T=4,R=4,B=14*dpr,pW=w-L-R,pH=h-T-B;
+    const HR_MIN=50,HR_MAX=90;
+    if(ecgHRHistory.length>=2){
+      ctx.strokeStyle=P.phECG; ctx.lineWidth=1.3*dpr;
       ctx.beginPath();
-      for (let i=0;i<ecgHRHistory.length;i++) {
-        const x = L + (i/(ECG_HIST_LEN-1))*pW;
-        const y = T + pH*(1-(ecgHRHistory[i]-HR_MIN)/(HR_MAX-HR_MIN));
-        i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+      for(let i=0;i<ecgHRHistory.length;i++){
+        const x=L+(i/(ECG_HIST_LEN-1))*pW;
+        const y=T+pH*(1-(ecgHRHistory[i]-HR_MIN)/(HR_MAX-HR_MIN));
+        i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
       }
       ctx.stroke();
     }
-
-    ctx.font=`${10*dpr}px ui-sans-serif,system-ui,sans-serif`;
-    ctx.textAlign='left'; ctx.textBaseline='bottom';
-    ctx.fillStyle='#ff6b9d';
-    ctx.fillText('Heart rate (BPM)', 8, h-2);
-    ctx.textAlign='right';
-    ctx.fillStyle=HR_MAX+'';
-    ctx.fillStyle='#8a97a3';
-    ctx.fillText(HR_MAX+' BPM', w-R-4, T+10*dpr);
-    ctx.fillText(HR_MIN+' BPM', w-R-4, h-B-2);
+    ctx.font=`${9*dpr}px Helvetica Neue,Helvetica,Arial,sans-serif`;
+    ctx.fillStyle=P.sub; ctx.textAlign='right'; ctx.textBaseline='top';
+    ctx.fillText(`${HR_MAX} BPM`, w-R-2, T+2);
+    ctx.textBaseline='bottom';
+    ctx.fillText(`${HR_MIN} BPM`, w-R-2, h-B-2);
+    ctx.textAlign='left'; ctx.fillStyle=P.phECG;
+    ctx.fillText('HEART RATE', 6, h-2);
   }
 
-  // ─── DRAW: RAW EMG SCOPE ─────────────────────────────────────────────────
-  function drawEMGScope(emgSamples) {
-    const canvas = document.getElementById('scopeEMG');
-    const {w,h,dpr} = setCanvasSize(canvas);
-    const ctx = canvas.getContext('2d');
+  // ─── DRAW: RAW EMG SCOPE (phosphor amber on dark) ─────────────────────────
+  function drawEMGScope(emgSamples){
+    const canvas=document.getElementById('scopeEMG');
+    const {w,h,dpr}=sz(canvas);
+    const ctx=canvas.getContext('2d');
+    const n=4, rowH=h/n;
+    const L=Math.round(58*dpr),R=6,pW=w-L-R;
 
-    ctx.fillStyle = '#080a0b';
-    ctx.fillRect(0,0,w,h);
-    ctx.strokeStyle = 'rgba(37,46,54,.6)';
-    ctx.lineWidth = 1;
-    for (let j=1;j<4;j++) { ctx.beginPath(); ctx.moveTo(0,j*(h/4)); ctx.lineTo(w,j*(h/4)); ctx.stroke(); }
+    if(!drawEMGScope._buf) drawEMGScope._buf=[[],[],[],[]];
+    const buf=drawEMGScope._buf;
+    for(const s of emgSamples){
+      for(let ch=0;ch<4;ch++){
+        buf[ch].push(s[ch]);
+        if(buf[ch].length>EMG_RAW_LEN) buf[ch].shift();
+      }
+    }
 
-    const n=4;
-    const rowH=h/n;
-    const L=Math.round(58*dpr), R=6;
-    const pW=w-L-R;
-
-    ctx.font=`${10*dpr}px ui-sans-serif,system-ui,sans-serif`;
+    scopeGrid(ctx,w,h,12,4);
+    ctx.font=`${9*dpr}px Helvetica Neue,Helvetica,Arial,sans-serif`;
     ctx.textAlign='right'; ctx.textBaseline='middle';
 
-    // Keep a rolling buffer of EMG samples
-    if (!drawEMGScope._buf) drawEMGScope._buf=[[],[],[],[]];
-    const buf = drawEMGScope._buf;
-    for (const s of emgSamples) {
-      for (let ch=0;ch<4;ch++) {
-        buf[ch].push(s[ch]);
-        if (buf[ch].length > EMG_RAW_LEN) buf[ch].shift();
-      }
-    }
-
-    for (let ch=0;ch<4;ch++) {
-      const centerY = rowH*(ch+0.5);
-      ctx.strokeStyle='rgba(37,46,54,.7)';
-      ctx.beginPath(); ctx.moveTo(L,centerY); ctx.lineTo(w-R,centerY); ctx.stroke();
-      ctx.fillStyle=emgChColors[ch];
-      ctx.fillText(EMG_LABELS[ch], L-6, centerY);
-      const vals=buf[ch];
-      if (vals.length<2) continue;
+    for(let ch=0;ch<4;ch++){
+      const centerY=rowH*(ch+0.5);
+      ctx.fillStyle=P.emgCh[ch];
+      ctx.fillText(EMG_LABELS[ch], L-4*dpr, centerY);
+      const vals=buf[ch]; if(vals.length<2) continue;
       const mx=Math.max(...vals.map(Math.abs),0.01);
-      ctx.strokeStyle=emgChColors[ch];
-      ctx.lineWidth=0.9*dpr;
+      ctx.strokeStyle=P.emgCh[ch]; ctx.lineWidth=0.85*dpr;
       ctx.beginPath();
-      for (let i=0;i<vals.length;i++) {
+      for(let i=0;i<vals.length;i++){
         const x=L+(i/(EMG_RAW_LEN-1))*pW;
         const y=centerY-(vals[i]/mx)*(rowH*0.44);
         i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
@@ -993,29 +1061,23 @@
     }
   }
 
-  // ─── DRAW: RAW ECG SCOPE ─────────────────────────────────────────────────
-  function drawECGScope(ecgSamples) {
-    const canvas = document.getElementById('scopeECG');
-    const {w,h,dpr} = setCanvasSize(canvas);
-    const ctx = canvas.getContext('2d');
-    drawGrid(ctx,w,h,dpr,10,3,'rgba(37,46,54,.5)');
+  // ─── DRAW: RAW ECG SCOPE (phosphor red on dark) ───────────────────────────
+  function drawECGScope(ecgSamples){
+    const canvas=document.getElementById('scopeECG');
+    const {w,h,dpr}=sz(canvas);
+    const ctx=canvas.getContext('2d');
+    scopeGrid(ctx,w,h,12,3);
 
-    if (!drawECGScope._buf) drawECGScope._buf=[];
+    if(!drawECGScope._buf) drawECGScope._buf=[];
     const buf=drawECGScope._buf;
-    for (const v of ecgSamples) {
-      buf.push(v);
-      if (buf.length>ECG_RAW_LEN) buf.shift();
-    }
+    for(const v of ecgSamples){buf.push(v);if(buf.length>ECG_RAW_LEN)buf.shift();}
 
-    const L=6, R=6, T=6, B=6;
-    const pW=w-L-R, pH=h-T-B;
+    if(buf.length<2) return;
+    const L=6,R=6,T=6,B=6,pW=w-L-R,pH=h-T-B;
     const mx=Math.max(...buf.map(Math.abs),0.5);
-
-    if (buf.length<2) return;
-    ctx.strokeStyle='#ff6b9d';
-    ctx.lineWidth=1.4*dpr;
+    ctx.strokeStyle=P.phECG; ctx.lineWidth=1.3*dpr;
     ctx.beginPath();
-    for (let i=0;i<buf.length;i++) {
+    for(let i=0;i<buf.length;i++){
       const x=L+(i/(ECG_RAW_LEN-1))*pW;
       const y=T+pH*(0.5-buf[i]/(mx*2.2));
       i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
@@ -1023,110 +1085,95 @@
     ctx.stroke();
   }
 
-  // ─── DRAW: TOPOMAP ───────────────────────────────────────────────────────
-  function drawTopomap(frame) {
-    const canvas = document.getElementById('topomap');
-    const dpr    = window.devicePixelRatio||1;
-    const rect   = canvas.getBoundingClientRect();
-    const size   = Math.max(200, Math.floor(Math.min(rect.width,rect.height||rect.width)*dpr));
-    if (canvas.width!==size||canvas.height!==size) { canvas.width=size; canvas.height=size; }
+  // ─── DRAW: TOPOMAP ────────────────────────────────────────────────────────
+  function drawTopomap(frame){
+    const canvas=document.getElementById('topomap');
+    const dpr=window.devicePixelRatio||1;
+    const rect=canvas.getBoundingClientRect();
+    const size=Math.max(200,Math.floor(Math.min(rect.width,rect.height||rect.width)*dpr));
+    if(canvas.width!==size||canvas.height!==size){canvas.width=size;canvas.height=size;}
 
-    const labels   = frame.metadata.channel_labels||[];
-    const channels = frame.samples.channels||[];
-    const vals     = labels.map((_,idx) => {
-      const s = channels[idx]||[];
-      return recentRMS(s);
-    });
-    const finite   = vals.filter(Number.isFinite);
-    const scale    = robustScale(finite);
-    const norm     = vals.map(v => Number.isFinite(v)?Math.max(-1,Math.min(1,v/scale)):0);
-    if (!topoSmoothed||topoSmoothed.length!==norm.length) topoSmoothed=norm.slice();
-    else topoSmoothed = topoSmoothed.map((old,i)=>old*0.82+norm[i]*0.18);
+    const labels=frame.metadata.channel_labels||[];
+    const channels=frame.samples.channels||[];
+    const vals=labels.map((_,idx)=>recentRMS(channels[idx]||[]));
+    const finite=vals.filter(Number.isFinite);
+    const scale=robustScale(finite);
+    const norm=vals.map(v=>Number.isFinite(v)?Math.max(-1,Math.min(1,v/scale)):0);
+    if(!topoSmoothed||topoSmoothed.length!==norm.length) topoSmoothed=norm.slice();
+    else topoSmoothed=topoSmoothed.map((old,i)=>old*0.82+norm[i]*0.18);
 
     const ctx=canvas.getContext('2d');
     ctx.clearRect(0,0,size,size);
-    ctx.fillStyle='#080a0b'; ctx.fillRect(0,0,size,size);
+    // Braun: topomap sits in dark scope housing
+    ctx.fillStyle=P.scopeBg; ctx.fillRect(0,0,size,size);
 
-    const cx=size/2, cy=size/2, r=size*0.41;
+    const cx=size/2,cy=size/2,r=size*0.41;
     const img=ctx.createImageData(size,size);
-    for (let y=0;y<size;y++) for (let x=0;x<size;x++) {
-      const nx=(x-cx)/r, ny=(y-cy)/r;
+    for(let y=0;y<size;y++) for(let x=0;x<size;x++){
+      const nx=(x-cx)/r,ny=(y-cy)/r;
       const off=(y*size+x)*4;
-      if (Math.hypot(nx,ny)>1) {
-        img.data[off]=8; img.data[off+1]=10; img.data[off+2]=11; img.data[off+3]=255; continue;
+      if(Math.hypot(nx,ny)>1){
+        img.data[off]=12;img.data[off+1]=12;img.data[off+2]=10;img.data[off+3]=255;continue;
       }
       const c=topoColor(interpolateAt(nx,ny,labels,topoSmoothed));
-      img.data[off]=c[0]; img.data[off+1]=c[1]; img.data[off+2]=c[2]; img.data[off+3]=255;
+      img.data[off]=c[0];img.data[off+1]=c[1];img.data[off+2]=c[2];img.data[off+3]=255;
     }
     ctx.putImageData(img,0,0);
 
     ctx.save();
-    ctx.strokeStyle='#d8e3ea'; ctx.lineWidth=2*dpr;
+    // Head outline in cream
+    ctx.strokeStyle='#C4C0B8'; ctx.lineWidth=1.5*dpr;
     ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(cx-0.08*r,cy-r); ctx.lineTo(cx,cy-1.13*r); ctx.lineTo(cx+0.08*r,cy-r);
-    ctx.stroke();
-    ctx.strokeStyle='rgba(216,227,234,.8)';
-    ctx.beginPath(); ctx.arc(cx-r*1.03,cy,r*.11,-Math.PI/2,Math.PI/2); ctx.stroke();
-    ctx.beginPath(); ctx.arc(cx+r*1.03,cy,r*.11,Math.PI/2,-Math.PI/2); ctx.stroke();
+    ctx.moveTo(cx-0.08*r,cy-r);ctx.lineTo(cx,cy-1.13*r);ctx.lineTo(cx+0.08*r,cy-r);ctx.stroke();
+    ctx.strokeStyle='rgba(196,192,184,.7)';
+    ctx.beginPath();ctx.arc(cx-r*1.03,cy,r*.11,-Math.PI/2,Math.PI/2);ctx.stroke();
+    ctx.beginPath();ctx.arc(cx+r*1.03,cy,r*.11,Math.PI/2,-Math.PI/2);ctx.stroke();
 
-    ctx.font=`${10*dpr}px ui-sans-serif,system-ui,sans-serif`;
+    ctx.font=`${9*dpr}px Helvetica Neue,Helvetica,Arial,sans-serif`;
     ctx.textAlign='center'; ctx.textBaseline='middle';
-    labels.forEach((lbl,idx) => {
-      const pos=topoPositions[lbl]; if (!pos) return;
-      const px=cx+pos[0]*r, py=cy+pos[1]*r;
-      ctx.fillStyle='#0a0c0e'; ctx.beginPath(); ctx.arc(px,py,4.5*dpr,0,Math.PI*2); ctx.fill();
-      ctx.strokeStyle='#e0eaf2'; ctx.lineWidth=1*dpr; ctx.stroke();
-      ctx.fillStyle='#e0eaf2'; ctx.fillText(lbl,px,py-11*dpr);
+    labels.forEach((l,i)=>{
+      const pos=topoPositions[l]; if(!pos) return;
+      const px=cx+pos[0]*r,py=cy+pos[1]*r;
+      ctx.fillStyle=P.scopeBg;
+      ctx.beginPath();ctx.arc(px,py,4*dpr,0,Math.PI*2);ctx.fill();
+      ctx.strokeStyle='#C4C0B8';ctx.lineWidth=1*dpr;ctx.stroke();
+      ctx.fillStyle='#C4C0B8';ctx.fillText(l,px,py-10*dpr);
     });
     ctx.restore();
     document.getElementById('topoScale').textContent=`scale ${fmt(scale,1)}`;
   }
 
-  // ─── ANIMATION LOOP ──────────────────────────────────────────────────────
-  function animLoop(ts) {
+  // ─── ANIMATION LOOP ───────────────────────────────────────────────────────
+  function animLoop(ts){
     requestAnimationFrame(animLoop);
-    const dt = lastAnimT == null ? 0.016 : Math.min((ts - lastAnimT) / 1000, 0.1);
-    lastAnimT = ts;
-    simTime += dt;
+    const dt=lastAnimT==null?0.016:Math.min((ts-lastAnimT)/1000,0.1);
+    lastAnimT=ts; simTime+=dt;
 
-    // Generate synthetic EMG + ECG samples for this frame
-    // Approximate strain from focus score (higher focus = less EMG strain in trapezius? or use fatigue proxy)
-    const focus       = lastFrame?.inference?.focus_score ?? 0.4;
-    const strainLevel = Math.max(0, Math.min(1, 0.6 - focus * 0.4 + 0.2 * Math.sin(simTime * 0.07)));
-    const emgPerFrame = 20;  // synthetic EMG samples per anim frame
-    const ecgPerFrame = 15;
-    const emgBatch    = [];
-    for (let i = 0; i < emgPerFrame; i++) {
-      emgBatch.push(emgSample(simTime + i * 0.001, strainLevel));
-    }
+    const focus=lastFrame?.inference?.focus_score??0.4;
+    const strain=Math.max(0,Math.min(1,0.6-focus*0.4+0.2*Math.sin(simTime*0.07)));
+
+    const emgBatch=Array.from({length:20},(_,i)=>emgSample(simTime+i*0.001,strain));
     pushEMGHistory(emgBatch);
 
-    const ecgBatch = [];
-    for (let i = 0; i < ecgPerFrame; i++) {
-      ecgBatch.push(ecgAt(simTime + i * (1/300)));
-    }
+    const ecgBatch=Array.from({length:15},(_,i)=>ecgAt(simTime+i/300));
 
-    // Update EMG strain metric card
-    const rms = Math.sqrt(emgBatch.flat().reduce((s,v)=>s+v*v,0)/emgBatch.flat().length);
-    const emgPct = Math.round(Math.min(100, strainLevel * 100));
-    const emgCol = strainLevel >= 0.65 ? 'var(--bad)' : strainLevel >= 0.4 ? 'var(--warn)' : 'var(--accent)';
-    const emgMood= strainLevel >= 0.65 ? 'high strain' : strainLevel >= 0.4 ? 'moderate' : 'relaxed';
-    document.getElementById('mcEMG').textContent        = `${emgPct}%`;
-    document.getElementById('mcEMG').style.color        = emgCol;
-    document.getElementById('mcEMGBar').style.width     = `${emgPct}%`;
-    document.getElementById('mcEMGBar').style.background= emgCol;
-    document.getElementById('mcEMGMood').textContent    = emgMood;
+    // EMG strain card
+    const emgPct=Math.round(Math.min(100,strain*100));
+    const emgCol=strain>=0.65?P.bad:strain>=0.4?P.warn:P.good;
+    setVal('mcEMG',   `${emgPct}%`, emgCol);
+    setBar('mcEMGBar', emgPct, emgCol);
+    setText('mcEMGMood', strain>=0.65?'high strain':strain>=0.4?'moderate':'relaxed');
 
-    // Update HR badge + ECG history
-    const hr = Math.round(currentHR(simTime));
-    setBadge('hrBadge', `♥ ${hr} BPM`, hr > 75 ? 'warn' : 'good');
-    setBadge('ecgRateBadge', `${hr} BPM`, hr > 75 ? 'warn' : 'good');
+    // HR badge
+    const hr=Math.round(currentHR(simTime));
+    setBadge('hrBadge',      `♥ ${hr} bpm`, hr>75?'warn':'good');
+    setBadge('ecgRateBadge', `${hr} bpm`,   hr>75?'warn':'good');
     ecgHRHistory.push(hr);
-    if (ecgHRHistory.length > ECG_HIST_LEN) ecgHRHistory.shift();
+    if(ecgHRHistory.length>ECG_HIST_LEN) ecgHRHistory.shift();
 
-    // Draw all charts
-    if (lastFrame) {
+    // Render all
+    if(lastFrame){
       drawEEGScope(lastFrame);
       drawTopomap(lastFrame);
       drawBandsChart(lastFrame);
@@ -1138,44 +1185,37 @@
     drawECGScope(ecgBatch);
   }
 
-  // ─── WEBSOCKET ───────────────────────────────────────────────────────────
-  function connect() {
-    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    const ws = new WebSocket(`${proto}://${location.host}/stream/eeg`);
-    ws.onmessage = e => {
-      lastFrame = JSON.parse(e.data);
-      updateStats(lastFrame);
-    };
-    ws.onclose = () => {
+  // ─── WEBSOCKET ────────────────────────────────────────────────────────────
+  function connect(){
+    const proto=location.protocol==='https:'?'wss':'ws';
+    const ws=new WebSocket(`${proto}://${location.host}/stream/eeg`);
+    ws.onmessage=e=>{ lastFrame=JSON.parse(e.data); updateStats(lastFrame); };
+    ws.onclose=()=>{
       setBadge('statusBadge','disconnected','bad');
-      if (!reconnectTimer) {
-        reconnectTimer = setTimeout(() => { reconnectTimer=null; connect(); }, 1500);
-      }
+      if(!reconnectTimer) reconnectTimer=setTimeout(()=>{reconnectTimer=null;connect();},1500);
     };
-    ws.onerror = () => ws.close();
+    ws.onerror=()=>ws.close();
   }
 
-  // ─── SIM INJECTION ───────────────────────────────────────────────────────
-  document.querySelectorAll('button[data-state]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const state = btn.dataset.state;
-      const msg   = document.getElementById('injectMessage');
-      try {
-        const res  = await fetch('/sim/inject',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({state,duration_s:5})});
-        const body = await res.json();
-        if (!res.ok) throw new Error(body.detail||'Failed');
-        msg.textContent = `✓ ${body.state} injected (5 s)`;
+  // ─── SIM INJECTION ────────────────────────────────────────────────────────
+  document.querySelectorAll('button[data-state]').forEach(btn=>{
+    btn.addEventListener('click',async()=>{
+      const state=btn.dataset.state;
+      const msg=document.getElementById('injectMessage');
+      try{
+        const res=await fetch('/sim/inject',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({state,duration_s:5})});
+        const body=await res.json();
+        if(!res.ok) throw new Error(body.detail||'Failed');
+        msg.textContent=`${body.state} injected`;
         setTimeout(()=>msg.textContent='',5000);
-      } catch(err) { msg.textContent=err.message; }
+      }catch(err){msg.textContent=err.message;}
     });
   });
 
-  // ─── RESIZE ──────────────────────────────────────────────────────────────
-  window.addEventListener('resize', () => {
-    if (lastFrame) { drawEEGScope(lastFrame); drawTopomap(lastFrame); }
+  window.addEventListener('resize',()=>{
+    if(lastFrame){drawEEGScope(lastFrame);drawTopomap(lastFrame);}
   });
 
-  // ─── BOOT ────────────────────────────────────────────────────────────────
   connect();
   requestAnimationFrame(animLoop);
 </script>
