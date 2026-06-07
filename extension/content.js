@@ -1,25 +1,31 @@
 let banner = null;
 
 function getPageColor() {
-  // Walk common page elements to find an actual background color
-  const candidates = [
-    document.querySelector("header"),
-    document.querySelector("nav"),
-    document.querySelector('[role="banner"]'),
-    document.querySelector("body"),
-    document.documentElement,
-  ];
-
-  for (const el of candidates) {
+  // Prefer the page body/root — we want to blend with the page, not the header chrome
+  const primary = [document.body, document.documentElement];
+  for (const el of primary) {
     if (!el) continue;
-    const bg = getComputedStyle(el).backgroundColor;
-    const rgba = parseRgba(bg);
+    const rgba = parseRgba(getComputedStyle(el).backgroundColor);
     if (rgba && rgba.a > 0.1 && !isWhiteOrTransparent(rgba)) {
       return rgba;
     }
   }
 
-  // Fall back to a neutral dark
+  // Only fall back to structural elements if the body is transparent/white
+  const fallbacks = [
+    document.querySelector("main"),
+    document.querySelector('[role="main"]'),
+    document.querySelector("#root"),
+    document.querySelector("#app"),
+  ];
+  for (const el of fallbacks) {
+    if (!el) continue;
+    const rgba = parseRgba(getComputedStyle(el).backgroundColor);
+    if (rgba && rgba.a > 0.1 && !isWhiteOrTransparent(rgba)) {
+      return rgba;
+    }
+  }
+
   return { r: 20, g: 20, b: 20, a: 1 };
 }
 
