@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from acquisition.inference import infer_live_state
 from acquisition.quality import quality_flags
 from acquisition.ring_buffer import RingBuffer
 from acquisition.spec import CHANNEL_LABELS, SAMPLE_RATE_HZ, STREAM_NAME
@@ -39,6 +40,7 @@ def build_eeg_frame(
             raw_ts = raw_ts[-max_n:]
 
     stats_ts = raw_ts.copy()
+    inference_samples = samples.copy()
 
     if samples.shape[0] > max_points:
         indices = np.linspace(0, samples.shape[0] - 1, max_points, dtype=int)
@@ -71,6 +73,11 @@ def build_eeg_frame(
             "window_s": float(window_s),
         },
         "quality": quality_flags(samples, metadata.channel_labels),
+        "inference": infer_live_state(
+            inference_samples,
+            metadata.channel_labels,
+            metadata.sample_rate_hz,
+        ),
     }
 
 

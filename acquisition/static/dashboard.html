@@ -197,6 +197,53 @@
       gap: 8px;
     }
 
+    .inference-body {
+      display: grid;
+      gap: 12px;
+      padding: 12px 14px 14px;
+    }
+
+    .score-block {
+      display: grid;
+      gap: 7px;
+    }
+
+    .score-line {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 13px;
+    }
+
+    .score-line span {
+      color: var(--muted);
+    }
+
+    .bar {
+      position: relative;
+      height: 10px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #0d0f11;
+      border: 1px solid var(--line);
+    }
+
+    .bar-fill {
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--accent);
+      transition: width 160ms linear, transform 160ms linear;
+    }
+
+    .reward-bar .bar-fill {
+      margin-left: 50%;
+      width: 0%;
+      transform-origin: left center;
+      background: var(--warn);
+    }
+
     button {
       min-height: 36px;
       border: 1px solid var(--line);
@@ -293,6 +340,48 @@
       <aside>
         <section>
           <div class="panel-head">
+            <div class="panel-title">Live Inference</div>
+            <div id="inferenceStatus" class="badge">waiting</div>
+          </div>
+          <div class="inference-body">
+            <div class="score-block">
+              <div class="score-line">
+                <span>Focus</span>
+                <strong id="focusScore">n/a</strong>
+              </div>
+              <div class="bar">
+                <div id="focusFill" class="bar-fill"></div>
+              </div>
+              <div class="score-line">
+                <span>Mood</span>
+                <strong id="focusMood">unknown</strong>
+              </div>
+            </div>
+
+            <div class="score-block">
+              <div class="score-line">
+                <span>Reward</span>
+                <strong id="rewardScore">n/a</strong>
+              </div>
+              <div class="bar reward-bar">
+                <div id="rewardFill" class="bar-fill"></div>
+              </div>
+              <div class="score-line">
+                <span>Verdict</span>
+                <strong id="rewardMood">unknown</strong>
+              </div>
+            </div>
+
+            <div class="kv">
+              <div><span>Dominant band</span><strong id="dominantBand">unknown</strong></div>
+              <div><span>Engagement</span><strong id="engagementIndex">n/a</strong></div>
+              <div><span>FAA</span><strong id="alphaAsymmetry">n/a</strong></div>
+            </div>
+          </div>
+        </section>
+
+        <section>
+          <div class="panel-head">
             <div class="panel-title">Brain Topology</div>
             <div id="topoScale" class="badge">activity</div>
           </div>
@@ -383,6 +472,7 @@
       const meta = frame.metadata || {};
       const stats = frame.stats || {};
       const quality = frame.quality || {};
+      const inference = frame.inference || {};
       const status = meta.connection_status || "starting";
       const kind = status === "connected" ? "good" : status === "degraded" ? "warn" : "";
       setBadge("statusBadge", status, kind);
@@ -397,6 +487,30 @@
       document.getElementById("flatChannels").textContent = String((quality.flat_channel_labels || []).length);
       document.getElementById("clipChannels").textContent = String((quality.clip_channel_labels || []).length);
       document.getElementById("message").textContent = meta.message || "";
+      updateInference(inference);
+    }
+
+    function updateInference(inference) {
+      const status = inference.status || "waiting";
+      const focus = inference.focus_score;
+      const reward = inference.reward_score;
+      const features = inference.features || {};
+      setBadge("inferenceStatus", status, status === "ok" ? "good" : "warn");
+
+      document.getElementById("focusScore").textContent = focus == null ? "n/a" : `${Math.round(focus * 100)}%`;
+      document.getElementById("focusFill").style.width = `${Math.max(0, Math.min(100, (focus || 0) * 100))}%`;
+      document.getElementById("focusFill").style.background = focus >= 0.7 ? "var(--accent)" : focus <= 0.36 ? "var(--bad)" : "var(--warn)";
+      document.getElementById("focusMood").textContent = labelize(inference.focus_mood || "unknown");
+
+      document.getElementById("rewardScore").textContent = reward == null ? "n/a" : formatSigned(reward, 2);
+      document.getElementById("rewardFill").style.width = `${Math.max(0, Math.min(100, Math.abs(reward || 0) * 50))}%`;
+      document.getElementById("rewardFill").style.transform = reward == null || reward >= 0 ? "translateX(0)" : "translateX(-100%)";
+      document.getElementById("rewardFill").style.background = reward == null ? "var(--muted)" : reward >= 0 ? "var(--accent)" : "var(--bad)";
+      document.getElementById("rewardMood").textContent = labelize(inference.reward_mood || "unknown");
+
+      document.getElementById("dominantBand").textContent = labelize(inference.dominant_band || "unknown");
+      document.getElementById("engagementIndex").textContent = features.engagement_index == null ? "n/a" : formatNumber(features.engagement_index, 2);
+      document.getElementById("alphaAsymmetry").textContent = features.frontal_alpha_asymmetry == null ? "n/a" : formatSigned(features.frontal_alpha_asymmetry, 2);
     }
 
     function draw(frame) {
@@ -634,6 +748,16 @@
 
     function formatNumber(value, digits) {
       return Number.isFinite(Number(value)) ? Number(value).toFixed(digits) : "0";
+    }
+
+    function formatSigned(value, digits) {
+      if (!Number.isFinite(Number(value))) return "0";
+      const fixed = Number(value).toFixed(digits);
+      return Number(value) > 0 ? `+${fixed}` : fixed;
+    }
+
+    function labelize(value) {
+      return String(value || "unknown").replaceAll("_", " ");
     }
 
     document.querySelectorAll("button[data-state]").forEach(button => {
