@@ -2,35 +2,27 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>DopaMAXX</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --bg:        #0f1117;
-      --surface:   #161922;
-      --surface-2: #1c2030;
-      --surface-3: #252a3a;
-      --border:    #252a3a;
-      --green:     #22c55e;
-      --green-dim: #166534;
-      --blue:      #3b82f6;
-      --orange:    #f97316;
-      --red:       #ef4444;
-      --text:      #f1f5f9;
-      --muted:     #64748b;
-      --muted-2:   #334155;
+      --bg:      #121212;
+      --s1:      #1a1a1a;
+      --s2:      #222222;
+      --line:    rgba(255,255,255,0.07);
+      --text:    #e0deda;
+      --sub:     #5a5a5a;
+      --accent:  #e8560a;
+      --live:    #3ecf6a;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      width: 300px;
+      width: 360px;
       background: var(--bg);
       color: var(--text);
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 12px;
+      font-family: -apple-system, 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
     }
 
     /* ── header ── */
@@ -38,243 +30,220 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 12px 14px 10px;
-      border-bottom: 1px solid var(--border);
+      padding: 16px;
+      border-bottom: 1px solid var(--line);
     }
 
     .wordmark {
-      font-size: 13px;
+      font-size: 11px;
       font-weight: 700;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
       color: var(--text);
-    }
-    .wordmark em { color: var(--green); font-style: normal; }
-
-    .eeg-badge {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      font-size: 10px;
-      font-weight: 500;
-      letter-spacing: 0.06em;
-      color: var(--muted);
-    }
-    .eeg-badge .dot {
-      width: 6px; height: 6px;
-      border-radius: 50%;
-      background: var(--muted-2);
       flex-shrink: 0;
     }
-    .eeg-badge.live .dot   { background: var(--green); animation: pulse 1.8s ease-in-out infinite; }
-    .eeg-badge.live        { color: var(--green); }
 
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50%       { opacity: 0.35; }
-    }
-
-    /* ── mode card ── */
-    .mode-card {
-      margin: 10px;
-      padding: 14px;
-      border-radius: 10px;
-      border: 1px solid var(--border);
-      background: var(--surface);
-    }
-
-    .mode-row {
+    .eeg-status {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      margin-bottom: 12px;
-    }
-
-    .mode-tag {
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.12em;
-      padding: 3px 9px;
-      border-radius: 4px;
-    }
-    .mode-tag.locked-in  { background: rgba(59,130,246,0.15); color: var(--blue);  border: 1px solid rgba(59,130,246,0.3); }
-    .mode-tag.locked-out { background: rgba(34,197,94,0.12);  color: var(--green); border: 1px solid rgba(34,197,94,0.25); }
-
-    .timer {
-      font-size: 22px;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      font-variant-numeric: tabular-nums;
-      color: var(--text);
-    }
-    .timer.dim { color: var(--muted); }
-
-    .kpi-row {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
       gap: 6px;
+      flex-shrink: 0;
+      white-space: nowrap;
     }
-
-    .kpi {
-      background: var(--surface-2);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 7px 9px;
+    .eeg-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--sub);
+      flex-shrink: 0;
     }
-    .kpi-val {
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--text);
-      margin-bottom: 2px;
-    }
-    .kpi-val.green  { color: var(--green); }
-    .kpi-val.blue   { color: var(--blue); }
-    .kpi-val.orange { color: var(--orange); }
-    .kpi-label {
-      font-size: 9px;
-      color: var(--muted);
-      letter-spacing: 0.08em;
+    .eeg-text {
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
       text-transform: uppercase;
+      color: var(--sub);
+    }
+    .eeg-status.live .eeg-dot  { background: var(--live); }
+    .eeg-status.live .eeg-text { color: var(--live); }
+
+    /* ── mode section ── */
+    .mode-section {
+      padding: 24px 16px;
+      border-bottom: 1px solid var(--line);
     }
 
-    /* ── divider ── */
-    .divider { border: none; border-top: 1px solid var(--border); margin: 0 10px; }
+    .section-eyebrow {
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--sub);
+      margin-bottom: 4px;   /* tight — eyebrow belongs to the name below it */
+    }
+
+    .mode-name {
+      font-size: 26px;
+      font-weight: 300;
+      letter-spacing: 0.01em;
+      color: var(--text);
+      line-height: 1;
+      margin-bottom: 24px;  /* large gap — separates primary from secondary */
+      transition: color 0.2s;
+    }
+    .mode-name.active {
+      color: var(--accent);
+      font-weight: 500;
+    }
+
+    /* ── metrics ── */
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0;
+    }
+
+    .metric { padding: 0; }
+    .metric + .metric {
+      padding-left: 16px;
+      border-left: 1px solid var(--line);
+    }
+
+    .metric-val {
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+      margin-bottom: 5px;
+      transition: color 0.2s;
+    }
+    .metric-val.dim { color: var(--sub); font-weight: 300; }
+
+    .metric-lbl {
+      font-size: 9px;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--sub);
+    }
 
     /* ── demo section ── */
     .demo-section {
-      padding: 10px 10px 12px;
+      padding: 16px;
     }
 
-    .demo-header {
+    .demo-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 8px;
+      margin-bottom: 16px;
     }
 
-    .section-label {
+    .ctrl-eyebrow {
       font-size: 9px;
       font-weight: 600;
-      letter-spacing: 0.12em;
+      letter-spacing: 0.2em;
       text-transform: uppercase;
-      color: var(--muted);
+      color: var(--sub);
     }
 
     /* toggle */
-    .toggle-wrap { display: flex; align-items: center; gap: 7px; }
-    .toggle-text { font-size: 10px; color: var(--muted); }
-    .toggle { position: relative; width: 32px; height: 18px; }
+    .toggle { position: relative; width: 34px; height: 20px; flex-shrink: 0; }
     .toggle input { opacity: 0; width: 0; height: 0; }
-    .slider {
+    .track {
       position: absolute; inset: 0;
-      background: var(--surface-3);
-      border-radius: 99px;
+      background: var(--s2);
+      border: 1px solid var(--line);
+      border-radius: 10px;
       cursor: pointer;
-      transition: background 0.2s;
-      border: 1px solid var(--border);
+      transition: background 0.2s, border-color 0.2s;
     }
-    .slider:before {
+    .track:before {
       content: '';
       position: absolute;
-      width: 12px; height: 12px;
-      left: 2px; bottom: 2px;
-      background: var(--muted);
+      width: 14px; height: 14px;
+      top: 2px; left: 2px;
+      background: var(--sub);
       border-radius: 50%;
       transition: transform 0.2s, background 0.2s;
     }
-    input:checked + .slider { background: rgba(34,197,94,0.2); border-color: var(--green-dim); }
-    input:checked + .slider:before { transform: translateX(14px); background: var(--green); }
+    input:checked + .track {
+      background: rgba(232,86,10,0.15);
+      border-color: rgba(232,86,10,0.3);
+    }
+    input:checked + .track:before {
+      transform: translateX(14px);
+      background: var(--accent);
+    }
 
-    /* switch button */
-    .switch-btn {
+    /* button */
+    .btn {
       width: 100%;
-      padding: 9px 12px;
-      border-radius: 7px;
-      border: 1px solid var(--border);
-      background: var(--surface-2);
-      color: var(--muted);
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 11px;
+      padding: 11px 0;
+      border: 1px solid var(--line);
+      border-radius: 2px;
+      background: transparent;
+      color: var(--sub);
+      font-family: inherit;
+      font-size: 10px;
       font-weight: 600;
-      letter-spacing: 0.06em;
-      cursor: pointer;
-      transition: all 0.15s;
+      letter-spacing: 0.16em;
       text-transform: uppercase;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s, background 0.15s;
     }
-    .switch-btn:not(:disabled):hover { border-color: var(--surface-3); color: var(--text); }
-    .switch-btn:active:not(:disabled) { transform: scale(0.98); }
-    .switch-btn:disabled { opacity: 0.3; cursor: not-allowed; }
-
-    .switch-btn.to-locked-in {
-      background: rgba(59,130,246,0.1);
-      border-color: rgba(59,130,246,0.3);
-      color: var(--blue);
+    .btn:disabled { opacity: 0.2; cursor: not-allowed; }
+    .btn:not(:disabled):hover { border-color: rgba(255,255,255,0.2); color: var(--text); }
+    .btn:active:not(:disabled) { opacity: 0.6; }
+    .btn.armed {
+      border-color: rgba(232,86,10,0.4);
+      color: var(--accent);
     }
-    .switch-btn.to-locked-in:not(:disabled):hover {
-      background: rgba(59,130,246,0.18);
-    }
-    .switch-btn.to-locked-out {
-      background: rgba(34,197,94,0.08);
-      border-color: rgba(34,197,94,0.25);
-      color: var(--green);
-    }
-    .switch-btn.to-locked-out:not(:disabled):hover {
-      background: rgba(34,197,94,0.14);
-    }
-
-    .demo-note {
-      margin-top: 6px;
-      font-size: 9px;
-      color: var(--muted-2);
-      text-align: center;
-      letter-spacing: 0.04em;
+    .btn.armed:not(:disabled):hover {
+      background: rgba(232,86,10,0.06);
+      border-color: rgba(232,86,10,0.6);
     }
   </style>
 </head>
 <body>
 
   <div class="header">
-    <span class="wordmark">DOPA<em>MAXX</em></span>
-    <span class="eeg-badge" id="eegBadge">
-      <span class="dot"></span>
-      <span id="eegLabel">EEG OFFLINE</span>
+    <span class="wordmark">DopaMAXX</span>
+    <span class="eeg-status" id="eegStatus">
+      <span class="eeg-dot"></span>
+      <span class="eeg-text" id="eegText">Offline</span>
     </span>
   </div>
 
-  <div class="mode-card">
-    <div class="mode-row">
-      <span class="mode-tag locked-out" id="modeTag">LOCKED OUT</span>
-      <span class="timer dim" id="timer">--:--</span>
-    </div>
-    <div class="kpi-row">
-      <div class="kpi">
-        <div class="kpi-val green" id="focusVal">—</div>
-        <div class="kpi-label">Focus Score</div>
+  <div class="mode-section">
+    <div class="section-eyebrow">Mode</div>
+    <div class="mode-name" id="modeName">Locked Out</div>
+    <div class="metrics">
+      <div class="metric">
+        <div class="metric-val dim" id="timerVal">--:--</div>
+        <div class="metric-lbl">Timer</div>
       </div>
-      <div class="kpi">
-        <div class="kpi-val blue" id="rewardVal">—</div>
-        <div class="kpi-label">Reward Score</div>
+      <div class="metric">
+        <div class="metric-val dim" id="focusVal">—</div>
+        <div class="metric-lbl">Focus</div>
+      </div>
+      <div class="metric">
+        <div class="metric-val dim" id="rewardVal">—</div>
+        <div class="metric-lbl">Reward</div>
       </div>
     </div>
   </div>
 
-  <hr class="divider" />
-
   <div class="demo-section">
-    <div class="demo-header">
-      <span class="section-label">Demo Mode</span>
-      <label class="toggle-wrap">
-        <span class="toggle-text" id="demoText">OFF</span>
-        <label class="toggle">
-          <input type="checkbox" id="demoToggle" />
-          <span class="slider"></span>
-        </label>
+    <div class="demo-row">
+      <span class="ctrl-eyebrow">Demo Override</span>
+      <label class="toggle">
+        <input type="checkbox" id="demoToggle" />
+        <span class="track"></span>
       </label>
     </div>
-
-    <button class="switch-btn" id="switchBtn" disabled>
-      SWITCH TO LOCKED IN
-    </button>
-    <div class="demo-note" id="demoNote">enable demo mode to override eeg transitions</div>
+    <button class="btn" id="switchBtn" disabled>Switch Mode</button>
   </div>
 
   <script src="popup.js"></script>
