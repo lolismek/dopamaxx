@@ -5,6 +5,7 @@
   const CAPTURE_MESSAGE = "locked_out_capture_post";
   const CONFIG_STORAGE_KEY = "lockedOutCaptureConfig";
   const DEFAULT_USER_ID = "demo_user";
+  const LOG_PREFIX = "[DopaMAXX locked-out]";
 
   const CHANNEL_LABELS = Object.freeze([
     "Fp1",
@@ -56,6 +57,7 @@
     }
 
     const payload = buildPayload(capture, config, sender);
+    const sentAtMs = performance.now();
     const response = await fetch(config.supabaseFunctionUrl, {
       method: "POST",
       headers: {
@@ -64,6 +66,7 @@
       },
       body: JSON.stringify(payload),
     });
+    const supabaseRoundTripMs = Math.round(performance.now() - sentAtMs);
 
     let body = null;
     try {
@@ -73,14 +76,28 @@
     }
 
     if (!response.ok) {
+      console.log(`${LOG_PREFIX} supabase-error`, {
+        post_id: payload.platform_post_id,
+        supabase_round_trip_ms: supabaseRoundTripMs,
+        status: response.status,
+        error: body && body.error,
+      });
       return {
         ok: false,
         error: body && body.error ? body.error : `capture failed with HTTP ${response.status}`,
         status: response.status,
+        supabase_round_trip_ms: supabaseRoundTripMs,
       };
     }
 
-    return Object.assign({ ok: true }, body);
+    console.log(`${LOG_PREFIX} supabase-saved`, {
+      post_id: payload.platform_post_id,
+      supabase_round_trip_ms: supabaseRoundTripMs,
+      reward_label: body && body.reward_label,
+      embedding_status: body && body.embedding_status,
+    });
+
+    return Object.assign({ ok: true, supabase_round_trip_ms: supabaseRoundTripMs }, body);
   }
 
   function buildPayload(capture, config, sender) {

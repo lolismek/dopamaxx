@@ -8,6 +8,7 @@
   const CAPTURE_MESSAGE = "locked_out_capture_post";
   const STATUS_MESSAGE = "get_status";
   const MODE_CHANGE_MESSAGE = "mode_change";
+  const LOG_PREFIX = "[DopaMAXX locked-out]";
 
   const selector = globalThis.DopaMaxxLockedOutSelector;
   if (!selector) return;
@@ -17,6 +18,7 @@
   let currentWinnerSinceMs = 0;
   let scanTimer = null;
   let scanQueued = false;
+  let lastScrollAtMs = 0;
   const submittedAtByPostId = new Map();
 
   function isSupportedHost() {
@@ -31,7 +33,7 @@
   function start() {
     if (scanTimer) return;
     scanTimer = window.setInterval(queueScan, SCAN_INTERVAL_MS);
-    window.addEventListener("scroll", queueScan, { passive: true });
+    window.addEventListener("scroll", handleScroll, { passive: true });
     window.addEventListener("resize", queueScan, { passive: true });
     queueScan();
   }
@@ -41,10 +43,15 @@
       window.clearInterval(scanTimer);
       scanTimer = null;
     }
-    window.removeEventListener("scroll", queueScan);
+    window.removeEventListener("scroll", handleScroll);
     window.removeEventListener("resize", queueScan);
     currentWinner = null;
     currentWinnerSinceMs = 0;
+  }
+
+  function handleScroll() {
+    lastScrollAtMs = performance.now();
+    queueScan();
   }
 
   function queueScan() {
@@ -85,6 +92,7 @@
         rect: rectToJson(winner.candidate.rect),
       };
       currentWinnerSinceMs = nowMs;
+      logCandidateDetected(currentWinner, nowMs);
       return;
     }
 
@@ -101,6 +109,7 @@
     submitCapture({
       post,
       dwell_ms: Math.round(dwellMs),
+      detection_to_capture_ms: Math.round(nowMs - currentWinnerSinceMs),
       viewport_score: Number(winner.score.toFixed(4)),
       center_score: Number(winner.centerScore.toFixed(4)),
       main_visible_ratio: Number(winner.mainVisibleRatio.toFixed(4)),
@@ -231,14 +240,57 @@
   }
 
   function submitCapture(capture) {
+    const sentAtMs = performance.now();
+    console.log(`${LOG_PREFIX} capture-submit`, {
+      post_id: capture.post.platform_post_id,
+      author: capture.post.author_handle,
+      dwell_ms: capture.dwell_ms,
+      detection_to_capture_ms: capture.detection_to_capture_ms,
+      viewport_score: capture.viewport_score,
+      main_visible_ratio: capture.main_visible_ratio,
+    });
+
     chrome.runtime.sendMessage({ type: CAPTURE_MESSAGE, capture }, (response) => {
+      const extensionRoundTripMs = Math.round(performance.now() - sentAtMs);
       if (chrome.runtime.lastError) {
-        console.debug("DopaMAXX locked-out capture failed:", chrome.runtime.lastError.message);
+        console.log(`${LOG_PREFIX} capture-error`, {
+          post_id: capture.post.platform_post_id,
+          extension_round_trip_ms: extensionRoundTripMs,
+          error: chrome.runtime.lastError.message,
+        });
         return;
       }
       if (!response || !response.ok) {
-        console.debug("DopaMAXX locked-out capture rejected:", response && response.error);
+        console.log(`${LOG_PREFIX} capture-rejected`, {
+          post_id: capture.post.platform_post_id,
+          extension_round_trip_ms: extensionRoundTripMs,
+          error: response && response.error,
+        });
+        return;
       }
+
+      console.log(`${LOG_PREFIX} capture-saved`, {
+        post_id: capture.post.platform_post_id,
+        extension_round_trip_ms: extensionRoundTripMs,
+        supabase_round_trip_ms: response.supabase_round_trip_ms,
+        reward_label: response.reward_label,
+        reward_score: response.reward_score,
+        embedding_status: response.embedding_status,
+        observation_id: response.observation_id,
+      });
+    });
+  }
+
+  function logCandidateDetected(winner, nowMs) {
+    const msSinceScroll = lastScrollAtMs > 0 ? Math.round(nowMs - lastScrollAtMs) : null;
+    console.log(`${LOG_PREFIX} centered-post-detected`, {
+      post_id: winner.post.platform_post_id,
+      author: winner.post.author_handle,
+      ms_since_scroll: msSinceScroll,
+      viewport_score: Number(winner.score.toFixed(4)),
+      center_score: Number(winner.center_score.toFixed(4)),
+      main_visible_ratio: Number(winner.main_visible_ratio.toFixed(4)),
+      text_preview: String(winner.post.text || "").slice(0, 120),
     });
   }
 
