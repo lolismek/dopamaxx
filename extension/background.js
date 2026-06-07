@@ -6,6 +6,8 @@ const MICRODOSE_USER_ID = "demo-user";
 const MICRODOSE_SESSION_ID = "demo-session";
 const MICRODOSE_TARGET_COUNT = 20;
 const MICRODOSE_POLL_ALARM = "microdose-poll";
+const EEG_WS_STORAGE_KEY = "dopamaxxEegWsUrl";
+const LOCKED_OUT_CAPTURE_CONFIG_STORAGE_KEY = "lockedOutCaptureConfig";
 
 const DISTRACTING_SITES = [
   "twitter.com", "x.com",
@@ -26,6 +28,8 @@ let state = {
   timerSeconds: 0,
   focusScore: null,
   rewardScore: null,
+  eegFrames: [],
+  eegWsUrl: null,
   ws: null,
   wsConnected: false,
   microdoseReadyCount: 0,
@@ -37,44 +41,131 @@ let state = {
 
 // ── WebSocket ──────────────────────────────────────────────────────────────
 
-const WS_URL = "ws://localhost:8000/stream/eeg";
+const DEFAULT_EEG_WS_URL = "ws://10.216.66.247:8765/stream/eeg";
 const WS_RETRY_MS = 3000;
+const EEG_FRAME_TTL_MS = 30000;
+const EEG_RECENT_GRACE_MS = 2000;
+const EEG_REWARD_SOURCE = "acquisition_inference_v1";
+let eegReconnectTimer = null;
+let eegConnectSequence = 0;
 
 function connectWebSocket() {
-  try {
-    state.ws = new WebSocket(WS_URL);
+  const sequence = ++eegConnectSequence;
+  loadEegWsUrl()
+    .then((url) => {
+      if (sequence !== eegConnectSequence) return;
+      openEegWebSocket(url);
+    })
+    .catch(() => {
+      if (sequence !== eegConnectSequence) return;
+      openEegWebSocket(DEFAULT_EEG_WS_URL);
+    });
+}
 
-    state.ws.onopen = () => {
+function openEegWebSocket(url) {
+  if (eegReconnectTimer) {
+    clearTimeout(eegReconnectTimer);
+    eegReconnectTimer = null;
+  }
+
+  try {
+    const ws = new WebSocket(url);
+    state.ws = ws;
+    state.eegWsUrl = url;
+
+    ws.onopen = () => {
+      if (state.ws !== ws) return;
       state.wsConnected = true;
       broadcastStatus();
     };
 
-    state.ws.onmessage = (event) => {
+    ws.onmessage = (event) => {
+      if (state.ws !== ws) return;
       let msg;
       try { msg = JSON.parse(event.data); } catch { return; }
       handleBackendMessage(msg);
     };
 
-    state.ws.onclose = () => {
+    ws.onclose = () => {
+      if (state.ws !== ws) return;
       state.wsConnected = false;
       state.ws = null;
       broadcastStatus();
-      setTimeout(connectWebSocket, WS_RETRY_MS);
+      scheduleEegReconnect();
     };
 
-    state.ws.onerror = () => {
-      state.ws?.close();
+    ws.onerror = () => {
+      ws.close();
     };
   } catch {
-    setTimeout(connectWebSocket, WS_RETRY_MS);
+    scheduleEegReconnect();
+  }
+}
+
+function scheduleEegReconnect() {
+  if (eegReconnectTimer) clearTimeout(eegReconnectTimer);
+  eegReconnectTimer = setTimeout(connectWebSocket, WS_RETRY_MS);
+}
+
+function reconnectWebSocket() {
+  eegConnectSequence += 1;
+  if (eegReconnectTimer) {
+    clearTimeout(eegReconnectTimer);
+    eegReconnectTimer = null;
+  }
+
+  const ws = state.ws;
+  state.ws = null;
+  state.wsConnected = false;
+  if (ws) {
+    try { ws.close(); } catch {}
+  }
+  broadcastStatus();
+  connectWebSocket();
+}
+
+async function loadEegWsUrl() {
+  const stored = await chrome.storage.local.get([
+    EEG_WS_STORAGE_KEY,
+    LOCKED_OUT_CAPTURE_CONFIG_STORAGE_KEY,
+  ]);
+  const lockedOutConfig = stored[LOCKED_OUT_CAPTURE_CONFIG_STORAGE_KEY] || {};
+  return normalizeEegWsUrl(stored[EEG_WS_STORAGE_KEY]) ||
+    normalizeEegWsUrl(lockedOutConfig.eegWsUrl) ||
+    DEFAULT_EEG_WS_URL;
+}
+
+function normalizeEegWsUrl(value) {
+  if (typeof value !== "string" || value.trim() === "") return null;
+
+  try {
+    const url = new URL(value.trim());
+    if (url.protocol === "http:") {
+      url.protocol = "ws:";
+    } else if (url.protocol === "https:") {
+      url.protocol = "wss:";
+    } else if (url.protocol !== "ws:" && url.protocol !== "wss:") {
+      return null;
+    }
+
+    if (!url.pathname || url.pathname === "/") {
+      url.pathname = "/stream/eeg";
+    }
+    return url.toString();
+  } catch {
+    return null;
   }
 }
 
 function handleBackendMessage(msg) {
-  // EEG frames from the acquisition service (msg has .samples, .channel_labels, etc.)
-  // Just keep the connection alive for now; mode changes come from the signal
-  // processing layer which sends { type: "mode_change", mode: "locked_in"|"locked_out" }
-  // or { type: "timer_update", seconds_remaining: N }.
+  if (isAcquisitionEegFrame(msg)) {
+    handleAcquisitionEegFrame(msg);
+    return;
+  }
+
+  // Mode changes come from the signal processing layer which sends
+  // { type: "mode_change", mode: "locked_in"|"locked_out" } or
+  // { type: "timer_update", seconds_remaining: N }.
   if (state.demoMode) return;
 
   if (msg.type === "mode_change") {
@@ -85,9 +176,154 @@ function handleBackendMessage(msg) {
   } else if (msg.type === "scores_update") {
     state.focusScore  = msg.focus_score  ?? state.focusScore;
     state.rewardScore = msg.reward_score ?? state.rewardScore;
+    recordEegScoreFrame({
+      receivedAtMs: Date.now(),
+      rewardScore: boundedNumber(msg.reward_score, -1, 1),
+      focusScore: boundedNumber(msg.focus_score, 0, 1),
+      rewardLabel: null,
+      streamName: "DSI24-EEG",
+      sourceMode: "scores_update",
+      sampleRateHz: 300,
+      channelLabels: null,
+    });
     broadcastStatus();
   }
-  // EEG frames (no .type) are silently consumed — connection staying alive is enough.
+}
+
+function isAcquisitionEegFrame(msg) {
+  return Boolean(
+    msg &&
+    typeof msg === "object" &&
+    msg.metadata &&
+    typeof msg.metadata === "object" &&
+    msg.inference &&
+    typeof msg.inference === "object"
+  );
+}
+
+function handleAcquisitionEegFrame(frame) {
+  const inference = frame.inference || {};
+  const metadata = frame.metadata || {};
+  const rewardScore = boundedNumber(inference.reward_score, -1, 1);
+  const focusScore = boundedNumber(inference.focus_score, 0, 1);
+  if (rewardScore == null && focusScore == null) return;
+
+  state.rewardScore = rewardScore ?? state.rewardScore;
+  state.focusScore = focusScore ?? state.focusScore;
+
+  recordEegScoreFrame({
+    receivedAtMs: Date.now(),
+    rewardScore,
+    focusScore,
+    rewardLabel: typeof inference.reward_mood === "string" ? inference.reward_mood : null,
+    streamName: typeof metadata.stream_name === "string" ? metadata.stream_name : "DSI24-EEG",
+    sourceMode: typeof metadata.source_mode === "string" ? metadata.source_mode : "unknown",
+    sampleRateHz: boundedNumber(metadata.sample_rate_hz, 1, 2000) ?? 300,
+    channelLabels: Array.isArray(metadata.channel_labels) ? metadata.channel_labels : null,
+  });
+
+  broadcastStatus();
+}
+
+function recordEegScoreFrame(frame) {
+  if (!Array.isArray(state.eegFrames)) state.eegFrames = [];
+  if (frame.rewardScore == null && frame.focusScore == null) return;
+
+  state.eegFrames.push({
+    received_at_ms: frame.receivedAtMs,
+    reward_score: frame.rewardScore,
+    focus_score: frame.focusScore,
+    reward_label: frame.rewardLabel,
+    stream_name: frame.streamName,
+    source_mode: frame.sourceMode,
+    sample_rate_hz: frame.sampleRateHz,
+    channel_labels: frame.channelLabels,
+  });
+  pruneEegFrames(frame.receivedAtMs);
+}
+
+function pruneEegFrames(nowMs) {
+  if (!Array.isArray(state.eegFrames)) return;
+  const cutoffMs = nowMs - EEG_FRAME_TTL_MS;
+  while (state.eegFrames.length > 0 && state.eegFrames[0].received_at_ms < cutoffMs) {
+    state.eegFrames.shift();
+  }
+}
+
+function buildLockedOutEegContext({ epochStartMs, epochEndMs, dwellMs }) {
+  const endMs = Number.isFinite(epochEndMs) ? epochEndMs : Date.now();
+  const startMs = Number.isFinite(epochStartMs) ? epochStartMs : endMs - Math.max(0, Number(dwellMs) || 0);
+  pruneEegFrames(Date.now());
+
+  const frames = Array.isArray(state.eegFrames) ? state.eegFrames : [];
+  let selected = frames.filter((frame) => {
+    return frame.reward_score != null &&
+      frame.received_at_ms >= startMs &&
+      frame.received_at_ms <= endMs;
+  });
+
+  const latest = frames[frames.length - 1];
+  if (
+    selected.length === 0 &&
+    latest &&
+    latest.reward_score != null &&
+    Math.abs(endMs - latest.received_at_ms) <= EEG_RECENT_GRACE_MS
+  ) {
+    selected = [latest];
+  }
+
+  if (selected.length === 0) return null;
+
+  const rewardScore = roundScore(mean(selected.map((frame) => frame.reward_score)));
+  const focusValues = selected
+    .map((frame) => frame.focus_score)
+    .filter((value) => value != null);
+  const focusScore = focusValues.length > 0 ? roundScore(mean(focusValues)) : null;
+  const first = selected[0];
+  const last = selected[selected.length - 1];
+
+  return {
+    acquisition_schema: "acquisition.websocket.eeg_frame.v1",
+    stream_name: first.stream_name || "DSI24-EEG",
+    sample_rate_hz: first.sample_rate_hz || 300,
+    channel_labels: first.channel_labels || undefined,
+    source_mode: first.source_mode || "unknown",
+    reward_source: EEG_REWARD_SOURCE,
+    reward_model_version: EEG_REWARD_SOURCE,
+    epoch_start_ms: Math.round(startMs),
+    epoch_end_ms: Math.round(endMs),
+    dwell_ms: Math.max(0, Math.round(Number(dwellMs) || 0)),
+    frame_count: selected.length,
+    coverage_ms: Math.max(0, Math.round(last.received_at_ms - first.received_at_ms)),
+    reward_score: rewardScore,
+    focus_score: focusScore,
+    reward_label: labelReward(rewardScore),
+  };
+}
+
+function mean(values) {
+  const finite = values.filter((value) => Number.isFinite(value));
+  if (finite.length === 0) return null;
+  return finite.reduce((sum, value) => sum + value, 0) / finite.length;
+}
+
+function boundedNumber(value, low, high) {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  if (!Number.isFinite(number)) return null;
+  return Math.max(low, Math.min(high, number));
+}
+
+function roundScore(value) {
+  if (!Number.isFinite(value)) return null;
+  return Math.round(value * 1000000) / 1000000;
+}
+
+function labelReward(score) {
+  if (!Number.isFinite(score)) return null;
+  if (score >= 0.25) return "hit";
+  if (score <= -0.25) return "miss";
+  return "neutral";
 }
 
 // ── Microdose feed ────────────────────────────────────────────────────────
@@ -331,6 +567,16 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   }
 });
 
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== "local") return;
+  if (
+    changes[EEG_WS_STORAGE_KEY] ||
+    changes[LOCKED_OUT_CAPTURE_CONFIG_STORAGE_KEY]
+  ) {
+    reconnectWebSocket();
+  }
+});
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function getStatus() {
@@ -338,6 +584,7 @@ function getStatus() {
     mode: state.mode,
     demoMode: state.demoMode,
     wsConnected: state.wsConnected,
+    eegWsUrl: state.eegWsUrl,
     timerSeconds: state.timerSeconds,
     focusScore: state.focusScore,
     rewardScore: state.rewardScore,
@@ -360,6 +607,7 @@ function broadcastStatus() {
 }
 
 globalThis.dopamaxxGetStatus = getStatus;
+globalThis.dopamaxxBuildLockedOutEegContext = buildLockedOutEegContext;
 
 // ── Init ───────────────────────────────────────────────────────────────────
 

@@ -10,13 +10,16 @@ the existing MV3 extension without a build step.
 2. It chooses the centered, mostly visible tweet and waits until it wins for
    `1200ms`.
 3. The extension background script verifies the current mode is `locked_out`.
-4. The background script POSTs the capture to the Supabase Edge Function.
-5. The Edge Function upserts `posts`, creates an OpenAI embedding, generates a
-   random fake EEG reward label, and inserts `post_observations`.
+4. The background script summarizes the acquisition WebSocket frames for that
+   dwell window.
+5. The background script POSTs the capture to the Supabase Edge Function.
+6. The Edge Function upserts `posts`, schedules an OpenAI embedding, and inserts
+   `post_observations`.
 
-The real acquisition service is not consumed yet. Observations still store
-`eeg_context` using the current acquisition stream contract so random labels can
-be replaced later without changing the database shape.
+The extension does not send raw EEG samples. `eeg_context` only stores timing,
+frame count, `reward_score`, `focus_score`, and the derived `reward_label`.
+If the acquisition service is offline, the Edge Function falls back to
+`random_v0` reward data so local testing still works.
 
 ## Chrome Configuration
 
@@ -28,12 +31,16 @@ chrome.storage.local.set({
   lockedOutCaptureConfig: {
     supabaseFunctionUrl: "https://<project-ref>.supabase.co/functions/v1/capture-post",
     supabaseAnonKey: "<supabase-publishable-key>",
-    userId: "demo_user"
+    userId: "demo_user",
+    eegWsUrl: "ws://10.216.66.247:8765/stream/eeg"
   }
 });
 ```
 
 The extension never stores the OpenAI key or Supabase service-role key.
+`eegWsUrl` should point at the acquisition service's derived EEG stream, not
+the raw sample stream. The derived stream is what includes `reward_score` and
+`focus_score`.
 
 ## Supabase Setup
 
@@ -61,5 +68,5 @@ key format.
   `locked_out_capture_post`.
 - The acquisition-compatible EEG context is defined in `eeg_contract.json` and
   mirrors `acquisition/spec.py`.
-- Reward labels are random for now:
+- Reward labels are derived from `reward_score`:
   `hit >= 0.25`, `miss <= -0.25`, otherwise `neutral`.

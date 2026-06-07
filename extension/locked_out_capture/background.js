@@ -94,6 +94,9 @@
       post_id: payload.platform_post_id,
       supabase_round_trip_ms: supabaseRoundTripMs,
       reward_label: body && body.reward_label,
+      reward_score: body && body.reward_score,
+      focus_score: body && body.focus_score,
+      reward_source: body && body.reward_source,
       embedding_status: body && body.embedding_status,
       embedding_async: body && body.embedding_async,
     });
@@ -106,6 +109,7 @@
     const observedAtMs = Date.parse(observedAt);
     const dwellMs = Math.max(0, Number(capture.dwell_ms) || 0);
     const epochEndMs = Number.isFinite(observedAtMs) ? observedAtMs : Date.now();
+    const epochStartMs = epochEndMs - dwellMs;
 
     return {
       user_id: config.userId || DEFAULT_USER_ID,
@@ -122,19 +126,36 @@
       center_score: numberOrNull(capture.center_score),
       main_visible_ratio: numberOrNull(capture.main_visible_ratio),
       observed_at: observedAt,
-      eeg_context: {
-        acquisition_schema: "acquisition.websocket.eeg_frame.v1",
-        stream_name: "DSI24-EEG",
-        sample_rate_hz: 300,
-        channel_labels: CHANNEL_LABELS,
-        source_mode: "random_v0",
-        epoch_start_ms: epochEndMs - dwellMs,
-        epoch_end_ms: epochEndMs,
-      },
+      eeg_context: buildEegContext({ epochStartMs, epochEndMs, dwellMs }),
       raw_capture: Object.assign({}, capture.raw_capture || {}, {
         tab_id: sender.tab && sender.tab.id,
         frame_id: sender.frameId,
       }),
+    };
+  }
+
+  function buildEegContext({ epochStartMs, epochEndMs, dwellMs }) {
+    if (typeof globalThis.dopamaxxBuildLockedOutEegContext === "function") {
+      const liveContext = globalThis.dopamaxxBuildLockedOutEegContext({
+        epochStartMs,
+        epochEndMs,
+        dwellMs,
+      });
+      if (liveContext && typeof liveContext === "object") return liveContext;
+    }
+
+    return {
+      acquisition_schema: "acquisition.websocket.eeg_frame.v1",
+      stream_name: "DSI24-EEG",
+      sample_rate_hz: 300,
+      channel_labels: CHANNEL_LABELS,
+      source_mode: "random_v0",
+      reward_source: "random_v0",
+      reward_model_version: "random_v0",
+      epoch_start_ms: epochStartMs,
+      epoch_end_ms: epochEndMs,
+      dwell_ms: dwellMs,
+      frame_count: 0,
     };
   }
 

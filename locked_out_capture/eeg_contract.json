@@ -23,5 +23,10 @@
     "O1",
     "O2"
   ],
-  "source_mode": "random_v0"
+  "source_mode": "simulator",
+  "allowed_source_modes": ["simulator", "hardware", "random_v0"],
+  "reward_source": "acquisition_inference_v1",
+  "reward_score": 0,
+  "focus_score": 0,
+  "reward_label": "neutral"
 }

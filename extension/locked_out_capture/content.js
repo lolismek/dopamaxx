@@ -303,6 +303,8 @@
           supabase_round_trip_ms: response.supabase_round_trip_ms,
           reward_label: response.reward_label,
           reward_score: response.reward_score,
+          focus_score: response.focus_score,
+          reward_source: response.reward_source,
           embedding_status: response.embedding_status,
           embedding_async: response.embedding_async,
           observation_id: response.observation_id,

@@ -16,7 +16,11 @@ Other laptops should use:
 | `http://10.216.66.247:8765/health` | JSON service health and bridge/reader status. |
 | `http://10.216.66.247:8765/metadata` | JSON stream metadata: channel labels, sample rate, source mode. |
 | `http://10.216.66.247:8765/stream/raw-info` | Binary raw stream protocol metadata. |
+| `ws://10.216.66.247:8765/stream/eeg` | Derived JSON EEG frames with `inference.reward_score` and `inference.focus_score`. |
 | `ws://10.216.66.247:8765/stream/raw` | Fast binary EEG stream for another DopaMAXX machine. |
 | `ws://10.216.66.247:8765/stream/raw-json` | Debug-friendly JSON EEG stream, lower throughput than binary. |
 
-Use `/stream/raw` for production consumers. If another laptop cannot connect, check that both machines are on the same network and that Windows Firewall allows inbound Python traffic on port `8765`.
+Use `/stream/eeg` for consumers that only need derived focus/reward metrics.
+Use `/stream/raw` for production consumers that need raw samples. If another
+laptop cannot connect, check that both machines are on the same network and
+that Windows Firewall allows inbound Python traffic on port `8765`.

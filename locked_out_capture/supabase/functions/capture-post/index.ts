@@ -97,13 +97,12 @@ Deno.serve(async (request) => {
       input: embeddingInput(normalized),
     });
 
-    const rewardScore = randomRewardScore();
-    const rewardLabel = labelReward(rewardScore);
     const eegContext = buildEegContext(normalized);
+    const reward = resolveReward(eegContext);
 
     const { data: existingObservation, error: existingObservationError } = await supabase
       .from("post_observations")
-      .select("id,reward_score,reward_label")
+      .select("id,reward_score,reward_label,focus_score,reward_source,reward_model_version,eeg_context")
       .eq("user_id", normalized.user_id)
       .eq("session_id", normalized.session_id)
       .eq("post_id", post.id)
@@ -120,7 +119,9 @@ Deno.serve(async (request) => {
         observation_id: existingObservation.id,
         reward_score: existingObservation.reward_score,
         reward_label: existingObservation.reward_label,
-        reward_source: "random_v0",
+        focus_score: existingObservation.focus_score ?? focusScoreFromContext(existingObservation.eeg_context),
+        reward_source: existingObservation.reward_source,
+        reward_model_version: existingObservation.reward_model_version,
         embedding_status: embeddingState.status,
         embedding_async: embeddingState.async,
         embedding_model: embeddingModel,
@@ -139,16 +140,18 @@ Deno.serve(async (request) => {
         viewport_score: normalized.viewport_score,
         center_score: normalized.center_score,
         main_visible_ratio: normalized.main_visible_ratio,
-        reward_source: "random_v0",
-        reward_model_version: "random_v0",
-        reward_score: rewardScore,
-        reward_label: rewardLabel,
+        reward_source: reward.source,
+        reward_model_version: reward.modelVersion,
+        reward_score: reward.score,
+        reward_label: reward.label,
+        focus_score: reward.focusScore,
         eeg_context: eegContext,
         raw_observation: {
           capture: normalized.raw_capture,
           reward: {
-            source: "random_v0",
+            source: reward.source,
             thresholds: { hit_gte: 0.25, miss_lte: -0.25 },
+            focus_score: reward.focusScore,
           },
         },
         observed_at: normalized.observed_at,
@@ -162,9 +165,11 @@ Deno.serve(async (request) => {
       ok: true,
       post_id: post.id,
       observation_id: observation.id,
-      reward_score: rewardScore,
-      reward_label: rewardLabel,
-      reward_source: "random_v0",
+      reward_score: reward.score,
+      reward_label: reward.label,
+      focus_score: reward.focusScore,
+      reward_source: reward.source,
+      reward_model_version: reward.modelVersion,
       embedding_status: embeddingState.status,
       embedding_async: embeddingState.async,
       embedding_model: embeddingModel,
@@ -401,35 +406,75 @@ function embeddingInput(payload: ReturnType<typeof normalizePayload>) {
 
 function buildEegContext(payload: ReturnType<typeof normalizePayload>) {
   const observedAtMs = Date.parse(payload.observed_at);
-  const fallback = {
+  const input = payload.eeg_context as Record<string, unknown>;
+  const fallbackEpochStartMs = observedAtMs - payload.dwell_ms;
+  const epochStartMs = optionalNumber(input.epoch_start_ms) ?? fallbackEpochStartMs;
+  const epochEndMs = optionalNumber(input.epoch_end_ms) ?? observedAtMs;
+  const rewardScore = boundedNumber(input.reward_score, -1, 1);
+  const focusScore = boundedNumber(input.focus_score, 0, 1);
+  const rewardSource = optionalString(input.reward_source) || "random_v0";
+  const rewardModelVersion = optionalString(input.reward_model_version) || rewardSource;
+  const context: Record<string, unknown> = {
     acquisition_schema: "acquisition.websocket.eeg_frame.v1",
     stream_name: "DSI24-EEG",
     sample_rate_hz: 300,
     channel_labels: CHANNEL_LABELS,
-    source_mode: "random_v0",
-    epoch_start_ms: observedAtMs - payload.dwell_ms,
-    epoch_end_ms: observedAtMs,
+    source_mode: optionalString(input.source_mode) || "random_v0",
+    reward_source: rewardSource,
+    reward_model_version: rewardModelVersion,
+    epoch_start_ms: Math.round(epochStartMs),
+    epoch_end_ms: Math.round(epochEndMs),
+    dwell_ms: Math.max(0, Math.round(optionalNumber(input.dwell_ms) ?? payload.dwell_ms)),
+    frame_count: Math.max(0, Math.round(optionalNumber(input.frame_count) ?? 0)),
   };
 
+  const coverageMs = optionalNumber(input.coverage_ms);
+  if (coverageMs !== null) context.coverage_ms = Math.max(0, Math.round(coverageMs));
+  if (rewardScore !== null) {
+    context.reward_score = roundScore(rewardScore);
+    context.reward_label = labelReward(rewardScore);
+  }
+  if (focusScore !== null) context.focus_score = roundScore(focusScore);
+
+  return context;
+}
+
+function resolveReward(eegContext: Record<string, unknown>) {
+  const eegRewardScore = boundedNumber(eegContext.reward_score, -1, 1);
+  if (eegRewardScore !== null) {
+    const score = roundScore(eegRewardScore);
+    return {
+      score,
+      label: labelReward(score),
+      source: "acquisition_inference_v1",
+      modelVersion: "acquisition_inference_v1",
+      focusScore: focusScoreFromContext(eegContext),
+    };
+  }
+
+  const score = randomRewardScore();
   return {
-    ...fallback,
-    ...payload.eeg_context,
-    acquisition_schema: "acquisition.websocket.eeg_frame.v1",
-    stream_name: "DSI24-EEG",
-    sample_rate_hz: 300,
-    channel_labels: CHANNEL_LABELS,
-    source_mode: "random_v0",
+    score,
+    label: labelReward(score),
+    source: "random_v0",
+    modelVersion: "random_v0",
+    focusScore: null,
   };
 }
 
 function randomRewardScore() {
-  return Math.round((Math.random() * 2 - 1) * 1000000) / 1000000;
+  return roundScore(Math.random() * 2 - 1);
 }
 
 function labelReward(score: number) {
   if (score >= 0.25) return "hit";
   if (score <= -0.25) return "miss";
   return "neutral";
+}
+
+function focusScoreFromContext(eegContext: unknown) {
+  if (!eegContext || typeof eegContext !== "object") return null;
+  return boundedNumber((eegContext as Record<string, unknown>).focus_score, 0, 1);
 }
 
 function requiredEnv(name: string) {
@@ -467,6 +512,16 @@ function optionalNumber(value: unknown) {
   if (value === null || value === undefined || value === "") return null;
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
+}
+
+function boundedNumber(value: unknown, low: number, high: number) {
+  const number = optionalNumber(value);
+  if (number === null) return null;
+  return Math.max(low, Math.min(high, number));
+}
+
+function roundScore(value: number) {
+  return Math.round(value * 1000000) / 1000000;
 }
 
 function jsonResponse(body: unknown, status = 200) {
