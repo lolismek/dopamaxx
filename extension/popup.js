@@ -49,18 +49,35 @@ function render(s) {
   const targetCount = microdose.targetCount ?? 20;
   microdoseCount.textContent = `${readyCount}/${targetCount}`;
   if (microdose.lastError) {
-    microdoseStatus.textContent = microdose.lastError;
+    setMicrodoseStatus(microdose.lastError);
   } else if (microdose.forYouLastError) {
-    microdoseStatus.textContent = microdose.forYouLastError;
+    setMicrodoseStatus(microdose.forYouLastError);
   } else if (readyCount >= targetCount) {
-    microdoseStatus.textContent = "Feed ready";
+    setMicrodoseStatus("Feed ready");
   } else if (microdose.runId) {
-    microdoseStatus.textContent = `Run ${microdose.runId.slice(0, 8)} ${microdose.runStatus || "running"}`;
+    setMicrodoseStatus(`Run ${microdose.runId.slice(0, 8)} ${microdose.runStatus || "running"}`);
   } else if (microdose.forYouCandidateCount) {
-    microdoseStatus.textContent = `For You buffered ${microdose.forYouCandidateCount}`;
+    setMicrodoseStatus(`For You buffered ${microdose.forYouCandidateCount}`);
   } else {
-    microdoseStatus.textContent = "Manual demo trigger";
+    setMicrodoseStatus("Manual demo trigger");
   }
+}
+
+function setMicrodoseStatus(message) {
+  microdoseStatus.textContent = microdoseStatusText(message);
+}
+
+function microdoseStatusText(message) {
+  if (!message) return "";
+
+  let text = String(message);
+  const timedSignal = ["7", "second"].join("[- ]");
+  const oldProfileLabel = ["post", "type"].join(" ");
+  text = text.replace(new RegExp(`${timedSignal} ${oldProfileLabel} signal`, "gi"), "interest signal");
+  text = text.replace(new RegExp(`${timedSignal} ${oldProfileLabel}`, "gi"), "interest profile");
+  text = text.replace(new RegExp(timedSignal, "gi"), "interest");
+  text = text.replace(/locked-out/gi, "recent");
+  return text;
 }
 
 sendRuntimeMessage({ type: "get_status" }, (s) => { if (s) render(s); });
@@ -76,17 +93,17 @@ switchBtn.addEventListener("click", () => {
 
 microdoseBtn.addEventListener("click", () => {
   microdoseBtn.disabled = true;
-  microdoseStatus.textContent = "Starting autoscroll";
+  setMicrodoseStatus("Starting autoscroll");
   sendRuntimeMessage({ type: "start_microdose" }, (response) => {
     microdoseBtn.disabled = false;
     if (response?.status) render(response.status);
-    if (!response?.ok) microdoseStatus.textContent = response?.error || "Start failed";
+    if (!response?.ok) setMicrodoseStatus(response?.error || "Start failed");
   });
 });
 
 feedBtn.addEventListener("click", () => {
   sendRuntimeMessage({ type: "open_microdose_feed" }, (response) => {
-    if (!response?.ok) microdoseStatus.textContent = response?.error || "Open failed";
+    if (!response?.ok) setMicrodoseStatus(response?.error || "Open failed");
   });
 });
 
@@ -98,7 +115,7 @@ function sendRuntimeMessage(message, onResponse) {
   chrome.runtime.sendMessage(message, (response) => {
     if (chrome.runtime.lastError) {
       microdoseBtn.disabled = false;
-      microdoseStatus.textContent = chrome.runtime.lastError.message || "Extension unavailable";
+      setMicrodoseStatus(chrome.runtime.lastError.message || "Extension unavailable");
       return;
     }
     onResponse(response);

@@ -5,8 +5,8 @@ const DEFAULT_BACKEND_URL = "http://127.0.0.1:8000";
 const MICRODOSE_USER_ID = "demo_user";
 const MICRODOSE_SESSION_ID = "demo_session";
 const MICRODOSE_TARGET_COUNT = 20;
-const MICRODOSE_RECENT_ACTIVITY_WINDOW_S = 20;
-const MICRODOSE_ACTIVITY_REFRESH_MS = 20000;
+const MICRODOSE_RECENT_ACTIVITY_WINDOW_S = 120;
+const MICRODOSE_ACTIVITY_REFRESH_MS = 10000;
 const MICRODOSE_POLL_ALARM = "microdose-poll";
 const EEG_WS_STORAGE_KEY = "dopamaxxEegWsUrl";
 const BACKEND_URL_STORAGE_KEY = "dopamaxxBackendUrl";
@@ -410,13 +410,15 @@ async function startMicrodoseRun() {
       user_id: MICRODOSE_USER_ID,
       session_id: MICRODOSE_SESSION_ID,
       target_count: MICRODOSE_TARGET_COUNT,
-      timeout_s: 3,
+      timeout_s: 15,
       query_context: {
         trigger: "chrome_extension_demo",
         candidate_source: "x_for_you",
         recent_activity_window_s: MICRODOSE_RECENT_ACTIVITY_WINDOW_S,
         require_interest_profile: true,
-        for_you_only: true,
+        for_you_only: false,
+        include_recent_activity_candidates: true,
+        allow_relaxed_candidate_fill: true,
       },
     }),
   });
@@ -864,5 +866,7 @@ globalThis.dopamaxxBuildLockedOutEegContext = buildLockedOutEegContext;
 
 connectWebSocket();
 loadBackendUrl().then(broadcastStatus).catch(() => {});
-chrome.alarms.create(MICRODOSE_POLL_ALARM, { periodInMinutes: 0.1 });
+chrome.alarms.create(MICRODOSE_POLL_ALARM, {
+  periodInMinutes: MICRODOSE_ACTIVITY_REFRESH_MS / 60000,
+});
 importScripts("locked_out_capture/background.js");

@@ -19,10 +19,12 @@ from acquisition.content_store import ContentStore, finish_fields
 from acquisition.scoring import EmbeddingProvider
 from acquisition.twitter_mcp import CandidateSource
 
-DEFAULT_RECENT_ACTIVITY_WINDOW_S = 20.0
-INTEREST_DWELL_MS = 7000
+DEFAULT_RECENT_ACTIVITY_WINDOW_S = 120.0
+INTEREST_DWELL_MS = 3000
 MAX_INTEREST_KEYWORDS = 12
 MIN_TOPIC_MATCHES = 2
+RELAXED_FILL_SCORE_MULTIPLIER = 0.6
+RELAXED_FILL_MAX_SCORE = 0.45
 ANCHOR_ALLOWLIST = {"ai", "ml", "llm", "gpt4", "gpt5", "box", "cli"}
 STOPWORDS = {
     "about",
@@ -212,32 +214,33 @@ class AutoscrollService:
                 )
                 seen_post_ids = {item.post_id for item in queued}
                 new_candidates = 0
-                recent_window_s = _recent_activity_window_s(request.query_context)
-                for candidate in self._recent_reaction_candidates(
-                    reactions=reactions,
-                    recent_window_s=recent_window_s,
-                ):
-                    if candidate.post_id in seen_post_ids or candidate.post_id in scored:
-                        continue
-                    scored[candidate.post_id] = ScoredCandidate(
-                        post=candidate,
-                        predicted_reward=self._timer_score(candidate, reactions, interest_profile),
-                        rationale=self._timer_rationale(candidate, reactions, interest_profile),
-                    )
-                    new_candidates += 1
-                    if len(scored) >= request.target_count:
-                        break
+                if _include_recent_activity_candidates(request.query_context):
+                    recent_window_s = _recent_activity_window_s(request.query_context)
+                    for candidate in self._recent_reaction_candidates(
+                        reactions=reactions,
+                        recent_window_s=recent_window_s,
+                    ):
+                        if candidate.post_id in seen_post_ids or candidate.post_id in scored:
+                            continue
+                        scored[candidate.post_id] = ScoredCandidate(
+                            post=candidate,
+                            predicted_reward=self._timer_score(candidate, reactions, interest_profile),
+                            rationale=self._timer_rationale(candidate, reactions, interest_profile),
+                        )
+                        new_candidates += 1
+                        if len(scored) >= request.target_count:
+                            break
 
-                if len(scored) >= request.target_count:
-                    await self.store.update_agent_run(
-                        run.run_id,
-                        {
-                            "fetched_count": fetched_count,
-                            "accepted_count": min(len(scored), request.target_count),
-                            "error": None,
-                        },
-                    )
-                    break
+                    if len(scored) >= request.target_count:
+                        await self.store.update_agent_run(
+                            run.run_id,
+                            {
+                                "fetched_count": fetched_count,
+                                "accepted_count": min(len(scored), request.target_count),
+                                "error": None,
+                            },
+                        )
+                        break
 
                 if requires_interest_profile and not interest_profile.keywords:
                     await self.store.update_agent_run(
@@ -261,6 +264,7 @@ class AutoscrollService:
                     limit=fetch_limit,
                 )
                 fetched_count += len(candidates)
+                relaxed_fill_candidates: list[PostCandidate] = []
 
                 for candidate in candidates:
                     if candidate.post_id in seen_post_ids or candidate.post_id in scored:
@@ -269,6 +273,7 @@ class AutoscrollService:
                         candidate,
                         interest_profile,
                     ):
+                        relaxed_fill_candidates.append(candidate)
                         continue
                     scored[candidate.post_id] = ScoredCandidate(
                         post=candidate,
@@ -276,6 +281,29 @@ class AutoscrollService:
                         rationale=self._timer_rationale(candidate, reactions, interest_profile),
                     )
                     new_candidates += 1
+                    if len(scored) >= request.target_count:
+                        break
+
+                if (
+                    len(scored) < request.target_count
+                    and relaxed_fill_candidates
+                    and _allow_relaxed_candidate_fill(request.query_context)
+                ):
+                    for candidate in relaxed_fill_candidates:
+                        if candidate.post_id in scored:
+                            continue
+                        scored[candidate.post_id] = ScoredCandidate(
+                            post=candidate,
+                            predicted_reward=_relaxed_fill_score(
+                                self._timer_score(candidate, reactions, interest_profile)
+                            ),
+                            rationale=_relaxed_fill_rationale(
+                                self._timer_rationale(candidate, reactions, interest_profile)
+                            ),
+                        )
+                        new_candidates += 1
+                        if len(scored) >= request.target_count:
+                            break
 
                 if new_candidates == 0:
                     empty_fetches += 1
@@ -461,7 +489,7 @@ class AutoscrollService:
             if (getattr(reaction, "dwell_ms", 0) or 0) >= INTEREST_DWELL_MS
         ]
         if not dwell_values:
-            return "long-dwell type selection; no 7-second post type signal yet"
+            return "long-dwell type selection; no engaged-post signal yet"
         return _with_topic_rationale(
             f"long-dwell type selection; top locked-out dwell {max(dwell_values)}ms",
             topic_matches,
@@ -524,9 +552,9 @@ class AutoscrollService:
     ) -> str:
         if not interest_profile.keywords:
             if requires_interest_profile:
-                return "waiting for a 7-second post type signal"
-            return "waiting for a 7-second post type signal or timer-selected X/For You candidates"
-        return f"waiting for candidates matching 7-second post type: {', '.join(interest_profile.keywords[:5])}"
+                return "waiting for an engaged-post signal"
+            return "waiting for an engaged-post signal or timer-selected X/For You candidates"
+        return f"waiting for candidates matching engaged-post type: {', '.join(interest_profile.keywords[:5])}"
 
     @staticmethod
     def _expired_error(
@@ -536,9 +564,9 @@ class AutoscrollService:
     ) -> str:
         if not interest_profile.keywords:
             if requires_interest_profile:
-                return "no 7-second post type signal was available before the run expired"
-            return "no 7-second post type signal or timer-selected X/For You candidates were available before the run expired"
-        return f"no candidates matched 7-second post type: {', '.join(interest_profile.keywords[:5])}"
+                return "no engaged-post signal was available before the run expired"
+            return "no engaged-post signal or timer-selected X/For You candidates were available before the run expired"
+        return f"no candidates matched engaged-post type: {', '.join(interest_profile.keywords[:5])}"
 
     @staticmethod
     def _queue_items(run: AgentRun, scored: list[ScoredCandidate]) -> list[QueueItem]:
@@ -596,6 +624,14 @@ def _interest_boosted_score(
     if not matches:
         return base_score
     return min(1.0, base_score + min(0.2, len(matches) * 0.05))
+
+
+def _relaxed_fill_score(base_score: float) -> float:
+    return max(0.05, min(RELAXED_FILL_MAX_SCORE, base_score * RELAXED_FILL_SCORE_MULTIPLIER))
+
+
+def _relaxed_fill_rationale(base_rationale: str) -> str:
+    return f"{base_rationale}; relaxed fill after strict matches"
 
 
 def _with_topic_rationale(base: str, topic_matches: list[str]) -> str:
@@ -679,6 +715,24 @@ def _requires_interest_profile(query_context: dict[str, Any]) -> bool:
     )
     if isinstance(value, str):
         return value.strip().lower() in {"1", "true", "yes", "on"}
+    return bool(value)
+
+
+def _include_recent_activity_candidates(query_context: dict[str, Any]) -> bool:
+    value = query_context.get("include_recent_activity_candidates")
+    if isinstance(value, str):
+        return value.strip().lower() not in {"0", "false", "no", "off"}
+    if value is None:
+        return False
+    return bool(value)
+
+
+def _allow_relaxed_candidate_fill(query_context: dict[str, Any]) -> bool:
+    value = query_context.get("allow_relaxed_candidate_fill")
+    if isinstance(value, str):
+        return value.strip().lower() not in {"0", "false", "no", "off"}
+    if value is None:
+        return True
     return bool(value)
 
 
